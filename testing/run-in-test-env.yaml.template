@@ -1,0 +1,16 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: run-in-test-env-pod-${MONGO_IMAGE_TAG_DNS}
+spec:
+  containers:
+  - name: run-in-test-env-ctnr-${MONGO_IMAGE_TAG_DNS}
+    image: localhost:32000/test-env:latest
+    command: ["bash"]
+    args: ["-c",  "until nc -z ${MONGO_SVC_NAME} ${MONGO_PORT}; do sleep 1; done; npm test"]
+    env:
+    - name: MONGO_CONNECT_STRING
+      value: ${MONGO_CONNECT_STRING}
+    - name: TEST_ID
+      value: ${TEST_ID}
+  restartPolicy: Never

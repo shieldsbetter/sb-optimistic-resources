@@ -1,0 +1,37 @@
+# Service manifest for ${MONGO_IMAGE_TAG}
+
+apiVersion: apps/v1
+kind: ReplicaSet
+metadata:
+  name: mongo-rs-${MONGO_IMAGE_TAG_DNS}
+  labels:
+    app: mongo-app-${MONGO_IMAGE_TAG_DNS}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: mongo-app-${MONGO_IMAGE_TAG_DNS}
+  template:
+    metadata:
+      labels:
+        app: mongo-app-${MONGO_IMAGE_TAG_DNS}
+    spec:
+      containers:
+      - name: mongo-ctnr-${MONGO_IMAGE_TAG_DNS}
+        image: mongo:${MONGO_IMAGE_TAG}
+        ports:
+        - containerPort: 27017
+
+---
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: mongo-svc-${MONGO_IMAGE_TAG_DNS}
+spec:
+  selector:
+    app: mongo-app-${MONGO_IMAGE_TAG_DNS}
+  ports:
+    - protocol: TCP
+      port: 27017
+      targetPort: 27017

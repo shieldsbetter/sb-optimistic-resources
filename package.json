@@ -1,0 +1,20 @@
+{
+  "name": "@shieldsbetter/data-slot",
+  "version": "0.0.1",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "ava"
+  },
+  "author": "Hampton Smith",
+  "license": "ISC",
+  "devDependencies": {
+    "ava": "^4.0.1",
+    "mongodb": "^4.4.1"
+  },
+  "ava": {
+    "files": [
+      "./testing/tests/*.js"
+    ]
+  }
+}

@@ -1,0 +1,20 @@
+#!/bin/bash
+
+if [[ ! -f /vagrant/package-lock.json ]]; then
+    echo
+    echo "I'm concerned because there is no 'package-lock.json' file in the" \
+            "root of the project directory. Image building will fail. Run" \
+            "'npm install' first to generate a package-lock.json." \
+            | fold -s -w 72
+    echo
+    exit 1
+fi
+
+cd /vagrant
+
+DOCKER_BUILDKIT=1 docker build \
+        --file testing/Dockerfile \
+        --tag localhost:32000/test-env \
+        .
+
+docker push localhost:32000/test-env

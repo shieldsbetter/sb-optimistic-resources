@@ -1,0 +1,6 @@
+#!/bin/bash
+
+build-test-image
+
+TEST_ID=$(echo $RANDOM | md5sum | head -c8)
+assemble-mongos $TEST_ID
