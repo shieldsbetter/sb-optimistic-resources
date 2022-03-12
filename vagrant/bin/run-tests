@@ -3,4 +3,11 @@
 build-test-image
 
 TEST_ID=$(echo $RANDOM | md5sum | head -c8)
-assemble-mongos $TEST_ID
+microk8s kubectl create namespace "$TEST_ID"
+
+try-run-tests "$TEST_ID"
+
+set -e
+echo "Deleting test resources..."
+microk8s kubectl delete namespace "$TEST_ID" >/dev/null
+echo "...done!"

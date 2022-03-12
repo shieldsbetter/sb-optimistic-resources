@@ -4,17 +4,22 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "test": "ava"
+    "test": "c8 -r html ava"
   },
   "author": "Hampton Smith",
   "license": "ISC",
   "devDependencies": {
     "ava": "^4.0.1",
-    "mongodb": "^4.4.1"
+    "c8": "^7.11.0",
+    "mongodb": "^4.4.1",
+    "sift": "^16.0.0"
   },
   "ava": {
     "files": [
       "./testing/tests/*.js"
     ]
+  },
+  "dependencies": {
+    "bs58": "^5.0.0"
   }
 }

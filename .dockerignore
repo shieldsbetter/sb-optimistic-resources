@@ -1,3 +1,4 @@
-/.vagrant
-/node_modules
-/vagrant
+/.vagrant/
+/coverage/
+/node_modules/
+/vagrant/

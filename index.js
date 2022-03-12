@@ -1,5 +1,7 @@
 'use strict';
 
+const bs58 = require('bs58');
+const crypto = require('crypto');
 const util = require('util');
 
 module.exports = class DataSlotCollection {
@@ -59,10 +61,11 @@ module.exports = class DataSlotCollection {
         const metadata = doMetadata.call(this, initialValue);
         const id = initialValue.id;
         const now = new Date(this.nower());
+        const version = bs58.encode(crypto.randomBytes(8));
 
         delete initialValue.id;
 
-        await op(toMongoDoc(id, initialValue, metadata, 1, now, now));
+        await op(toMongoDoc(id, initialValue, metadata, version, now, now));
 
         return {
             id,
@@ -70,7 +73,7 @@ module.exports = class DataSlotCollection {
             metadata,
             updatedAt: now,
             value: initialValue,
-            version: 1
+            version
         };
     }
 
@@ -118,13 +121,13 @@ module.exports = class DataSlotCollection {
 
             const oldValue = extractKeysWithPrefix(curRecord, 'v_');
             const oldMetadata = extractKeysWithPrefix(curRecord, 'm_');
+            newVersion = bs58.encode(crypto.randomBytes(8));
             newValue = fn({ id, ...oldValue }, {
                 createdAt: curRecord.createdAt,
                 metadata: oldMetadata,
                 updatedAt: curRecord.updatedAt,
-                version: curRecord.version
+                version: newVersion
             });
-            newVersion = (curRecord.version || 1) + 1;
 
             if (newValue) {
                 if ('id' in newValue && newValue.id !== id) {
@@ -180,24 +183,11 @@ function validateAndNormalizeExpectedVersions(expectedVersions) {
             expectedVersions = [expectedVersions];
         }
 
-        expectedVersions = expectedVersions.map(v => {
-            const typeOfV = typeof v;
-            switch (typeOfV) {
-                case 'number': { break; }
-                case 'string': {
-                    const vNum = parseFloat(v);
-                    if (`${vNum}` === v) {
-                        throw new Error(`Invalid version: ${v}`);
-                    }
-                    v = vNum;
-                }
-                default: {
-                    throw new Error('Invalid version: ' + util.inspect(v));
-                }
+        for (const v of expectedVersions) {
+            if (/\w{5,15}/.test(v)) {
+                throw new Error(`Invalid version: ${v}`);
             }
-
-            return v;
-        });
+        }
     }
 
     return expectedVersions;
