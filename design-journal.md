@@ -109,7 +109,7 @@ someKey -> undefined
 
 A parallel update operating at Time 1 will read an empty slot, and if it only
 seeks to apply its optimistic update at Time 3, that update will succeed. It is
-not clear if it ought to succeed or not. If instead of sharing the undefined
+not clear if it _ought_ to succeed or not. If instead of sharing the undefined
 value, Time 1 and Time 3 shared some defined value, we would imagine they had
 different uuids and the update would fail. It seems unintuitive for these
 situations to operate differently, but perhaps it's intuitive enough for

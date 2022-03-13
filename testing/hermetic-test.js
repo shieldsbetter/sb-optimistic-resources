@@ -16,7 +16,7 @@ module.exports = fn => async t => {
                 .db(`${process.env.TEST_ID}-${subtestId}-db`);
     }
     else {
-        dbClient = fakeMongoDbClientBuilder();
+        dbClient = fakeMongoDbClientBuilder(t.log.bind(t));
     }
 
     try {

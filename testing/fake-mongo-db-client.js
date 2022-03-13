@@ -1,8 +1,9 @@
 'use strict';
 
+const clone = require('clone');
 const sift = require('sift');
 
-module.exports = () => {
+module.exports = (log) => {
     const collections = {};
 
     return {
@@ -11,19 +12,19 @@ module.exports = () => {
                 collections[name] = [];
             }
 
-            return fakeMongoCollectionClient(collections[name]);
+            return fakeMongoCollectionClient(collections[name], log);
         },
 
         dropDatabase() {}
     };
 };
 
-function fakeMongoCollectionClient(docs) {
+function fakeMongoCollectionClient(docs, log) {
     return {
         async findOne(q) {
             const matches = docs.filter(sift(q));
 
-            return matches[0] || null;
+            return clone(matches[0]) || null;
         },
 
         async insertOne(d) {
@@ -34,7 +35,7 @@ function fakeMongoCollectionClient(docs) {
                 };
             }
 
-            docs.push(d);
+            docs.push(clone(d));
         },
 
         async replaceOne(q, d, opts = {}) {
@@ -44,12 +45,23 @@ function fakeMongoCollectionClient(docs) {
             let upsertedCount = 0;
             if (index === -1) {
                 if (opts.upsert) {
+                    if (q._id && docs.find(({ _id }) => _id === q._id)) {
+                        // Duplicate id.
+                        const e = new Error('Duplicate key error');
+                        e.code = 11000;
+                        e.index = 0;
+                        e.keyPattern = { _id: 1 };
+                        e.keyValue = { _id: d._id };
+
+                        throw e;
+                    }
+
                     this.insertOne({ ...q, ...d });
                     upsertedCount = 1;
                 }
             }
             else {
-                docs[index] = { ...q, ...d };
+                docs[index] = { ...clone(q), ...clone(d) };
             }
 
             return {

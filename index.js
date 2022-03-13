@@ -11,15 +11,17 @@ module.exports = class DataSlotCollection {
         buildMissingCartridgeValue = id => {
             throw noSuchCartridge(`id ${id}`, { id });
         },
+        log = console.log.bind(console),
         nower = Date.now,
-        setTimeout
+        ...otherOpts
     } = {}) {
         this.assertValidId = assertValidId;
         this.buildMetadata = buildMetadata;
         this.buildMissingCartridgeValue = buildMissingCartridgeValue;
         this.collection = collection;
+        this.log = log;
         this.nower = nower;
-        this.setTimeout = setTimeout;
+        this.setTimeout = otherOpts.setTimeout || setTimeout;
     }
 
     async fetchById(id) {
@@ -77,11 +79,8 @@ module.exports = class DataSlotCollection {
         };
     }
 
-    async updateById(id, fn, expectedVersions, {
-        shouldRetry,
-        upsert = true
-    } = {}) {
-        if (!shouldRetry) {
+    async updateById(id, fn, expectedVersions, { shouldRetry } = {}) {
+        if (!shouldRetry || shouldRetry === true) {
             shouldRetry = async tries => {
                 await new Promise(resolve => this.setTimeout(resolve, 200));
 
@@ -114,15 +113,15 @@ module.exports = class DataSlotCollection {
 
             if (expectedVersions !== undefined
                     && !expectedVersions.includes(curRecord.version)) {
-                throw new Error(`Not an expected version: `
-                        + `"${curRecord.version}". Expected one of: `
+                throw error('VERSION_ASSERTION_FAILED', `Not an expected `
+                        + `version: "${curRecord.version}". Expected one of: `
                         + `${JSON.stringify(expectedVersions)}`);
             }
 
             const oldValue = extractKeysWithPrefix(curRecord, 'v_');
             const oldMetadata = extractKeysWithPrefix(curRecord, 'm_');
             newVersion = bs58.encode(crypto.randomBytes(8));
-            newValue = fn({ id, ...oldValue }, {
+            newValue = await fn({ id, ...oldValue }, {
                 createdAt: curRecord.createdAt,
                 metadata: oldMetadata,
                 updatedAt: curRecord.updatedAt,
@@ -131,7 +130,7 @@ module.exports = class DataSlotCollection {
 
             if (newValue) {
                 if ('id' in newValue && newValue.id !== id) {
-                    throw new Error(
+                    throw error('INVALID_UPDATE',
                             `Cannot modify id. ${id} =/=> ${newValue.id}`);
                 }
                 delete newValue.id;
@@ -141,21 +140,27 @@ module.exports = class DataSlotCollection {
                 newMetadata = doMetadata.call(this, newValue);
                 now = new Date(this.nower());
 
-                const { matchedCount, upsertedCount } =
-                        await this.collection.replaceOne(
-                                { _id: id, version: curRecord.version },
-                                toMongoDoc(id, newValue, newMetadata,
-                                        newVersion,
-                                        curRecord.createdAt,
-                                        now),
-                                { upsert });
-                tries++;
+                try {
+                    const { matchedCount, upsertedCount } =
+                            await this.collection.replaceOne(
+                                    { _id: id, version: curRecord.version },
+                                    toMongoDoc(id, newValue, newMetadata,
+                                            newVersion,
+                                            curRecord.createdAt,
+                                            now),
+                                    { upsert: true });
+                    tries++;
 
-                if (matchedCount === 0 && !upsert) {
-                    throw noSuchCartridge(`id ${id}`, { id });
+                    success = (matchedCount + upsertedCount) > 0;
                 }
+                catch (e) {
+                    if (e.code !== 11000) {
+                        throw error('UNEXPECTED_ERROR', 'Unexpected error.', e);
+                    }
 
-                success = (matchedCount + upsertedCount) > 0;
+                    // MongoServerError 11000. The _id is already present with
+                    // a different version number.
+                }
             }
             else {
                 success = true;
@@ -177,34 +182,6 @@ module.exports = class DataSlotCollection {
     }
 }
 
-function validateAndNormalizeExpectedVersions(expectedVersions) {
-    if (expectedVersions !== undefined) {
-        if (!Array.isArray(expectedVersions)) {
-            expectedVersions = [expectedVersions];
-        }
-
-        for (const v of expectedVersions) {
-            if (/\w{5,15}/.test(v)) {
-                throw new Error(`Invalid version: ${v}`);
-            }
-        }
-    }
-
-    return expectedVersions;
-}
-
-function toMongoDoc(id, value, metadata, version, createdAt, now) {
-    return {
-        _id: id,
-        createdAt: createdAt || now,
-        updatedAt: now,
-        version,
-
-        ...mapTopLevelKeys(metadata, k => `m_${k}`),
-        ...mapTopLevelKeys(value, k => `v_${k}`)
-    };
-}
-
 function assertValidValue(v, desc) {
     if (typeof v !== 'object' || Array.isArray(v) || v === null) {
         throw new Error(`${v} must be a non-array, non-null object. Was: `
@@ -221,6 +198,17 @@ function doMetadata(value) {
     }
 
     return metadata;
+}
+
+function error(code, msg, cause) {
+    const e = new Error(msg);
+    e.code = code;
+
+    if (cause) {
+        e.cause = cause;
+    }
+
+    return e;
 }
 
 function extractKeysWithPrefix(o, prefix) {
@@ -243,4 +231,32 @@ function noSuchCartridge(description, details) {
     e.code = 'NO_SUCH_CARTRIDGE';
     e.details = { description, ...details };
     return e;
+}
+
+function toMongoDoc(id, value, metadata, version, createdAt, now) {
+    return {
+        _id: id,
+        createdAt: createdAt || now,
+        updatedAt: now,
+        version,
+
+        ...mapTopLevelKeys(metadata, k => `m_${k}`),
+        ...mapTopLevelKeys(value, k => `v_${k}`)
+    };
+}
+
+function validateAndNormalizeExpectedVersions(expectedVersions) {
+    if (expectedVersions !== undefined) {
+        if (!Array.isArray(expectedVersions)) {
+            expectedVersions = [expectedVersions];
+        }
+
+        for (const v of expectedVersions) {
+            if (!/\w{5,15}/.test(v)) {
+                throw new Error(`Invalid version: ${v}`);
+            }
+        }
+    }
+
+    return expectedVersions;
 }
