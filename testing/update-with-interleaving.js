@@ -1,44 +1,104 @@
 'use strict';
 
-module.exports = async (dcc, id, update1, update2,
+const assert = require('assert');
+
+module.exports = async (dcc, id, update1, otherUpdates,
         log = console.log.bind(console)) => {
-    let resolvePause1;
-    const pauser1 = new Promise(resolve => { resolvePause1 = resolve; });
 
-    let resolvePause2;
-    const pauser2 = new Promise(resolve => { resolvePause2 = resolve; });
+    if (!Array.isArray(otherUpdates)) {
+        otherUpdates = [otherUpdates];
+    }
 
-    const update1Pr = dcc.updateById(id, async (...args) => {
-        const newValue = await update1(...args);
-        resolvePause2();
+    let phase1Latch;
+    let phase1Release;
+    let phase2Latch;
+    let phase2Release;
+    let phase3Latch;
+    let phase3Release;
+    let phase4Latch;
+    let phase4Release;
 
-        await pauser1;
+    phase3Latch = new Promise(r => { phase3Release = r; });
+
+    phase4Latch = Promise.resolve();
+    phase4Release = () => {};
+
+    let moreInterleaving = true;
+
+    const primaryPr = dcc.updateById(id, async (...args) => {
+        if (moreInterleaving) {
+            phase2Latch = new Promise(r => { phase2Release = r; });
+
+            phase4Release();
+
+            assert(phase1Latch, 'phase 1 ready');
+            await phase1Latch;
+            phase1Latch = null;
+        }
+
+        let newValue;
+        try {
+            newValue = await update1(...args);
+        }
+        finally {
+            if (moreInterleaving) {
+                phase4Latch = new Promise(r => { phase4Release = r; });
+
+                phase2Release();
+
+                assert(phase3Latch, 'phase 3 ready');
+                await phase3Latch;
+                phase3Latch = null;
+            }
+        }
+
         return newValue;
     });
 
-    const update2Pr = dcc.updateById(id, async (...args) => {
-        await pauser2;
-        const result = await update2(...args);
-        return result;
-    });
-
     let error;
+    let i = 0;
+    while (i < otherUpdates.length && !error) {
+        const otherUpdate = otherUpdates[i];
+
+        phase1Latch = new Promise(r => { phase1Release = r; });
+
+        phase3Release();
+
+        assert(phase4Latch, 'phase 4 ready');
+        await phase4Latch;
+        phase4Latch = null;
+
+        try {
+            await dcc.updateById(id, async (...args) => {
+                const result = await otherUpdate(...args);
+                return result;
+            });
+        }
+        catch (e) {
+            e.interleavedSource = `interleave${i}`;
+            error = e;
+        }
+        finally {
+            phase3Latch = new Promise(r => { phase3Release = r; });
+
+            phase1Release();
+
+            assert(phase2Latch, 'phase 2 ready');
+            await phase2Latch;
+            phase2Latch = null;
+        }
+
+        i++;
+    }
+
+    moreInterleaving = false;
+    phase3Release();
 
     try {
-        await update2Pr;
+        await primaryPr;
     }
     catch (e) {
-        e.interleavedSource = 'update2';
-        error = e;
-    }
-
-    resolvePause1();
-
-    try {
-        await update1Pr;
-    }
-    catch (e) {
-        e.interleavedSource = 'update1';
+        e.interleavedSource = 'primary';
         error = e;
     }
 

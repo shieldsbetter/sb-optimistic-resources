@@ -149,7 +149,6 @@ module.exports = class DataSlotCollection {
                                             curRecord.createdAt,
                                             now),
                                     { upsert: true });
-                    tries++;
 
                     success = (matchedCount + upsertedCount) > 0;
                 }
@@ -161,6 +160,8 @@ module.exports = class DataSlotCollection {
                     // MongoServerError 11000. The _id is already present with
                     // a different version number.
                 }
+
+                tries++;
             }
             else {
                 success = true;
@@ -168,7 +169,8 @@ module.exports = class DataSlotCollection {
         } while (!success && await shouldRetry(tries));
 
         if (!success) {
-            throw new Error('Ran out of retries attempting to update ' + id);
+            throw error('EXHAUSTED_RETRIES',
+                    'Ran out of retries attempting to update ' + id);
         }
 
         return {

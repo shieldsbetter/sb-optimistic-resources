@@ -234,7 +234,7 @@ test('cannot update id', hermeticTest(async (t, { dbClient }) => {
     t.is(e.code, 'INVALID_UPDATE');
 }));
 
-test('first update wins', hermeticTest(async (t, { dbClient }) => {
+test('interleaved updated', hermeticTest(async (t, { dbClient }) => {
     const dcc = new DataSlotCollection(dbClient.collection('foo'), {
         log: t.log.bind(t)
     });
@@ -269,4 +269,82 @@ test('first update wins', hermeticTest(async (t, { dbClient }) => {
 
     // Update #2 happened first, and then update #1 retried...
     t.is(fetchValue.value.bazz, 'bazzval1');
+}));
+
+test('default missing cartridge', hermeticTest(async (t, { dbClient }) => {
+    const dcc = new DataSlotCollection(dbClient.collection('foo'), {
+        log: t.log.bind(t)
+    });
+
+    const e = await t.throwsAsync(dcc.updateById('foo', () => ({ id: 'foo' })));
+
+    t.is(e.code, 'NO_SUCH_CARTRIDGE');
+}));
+
+test('no update', hermeticTest(async (t, { dbClient }) => {
+    const dcc = new DataSlotCollection(dbClient.collection('foo'), {
+        log: t.log.bind(t),
+        nower: () => 123
+    });
+
+    await dcc.insert({
+        id: 'foo',
+        bar: 'barval'
+    });
+
+    await dcc.updateById('foo', () => {})
+
+    const fetchResult = dateToMs(await dcc.fetchById('foo'));
+
+    t.deepEqual(fetchResult, {
+        createdAt: 123,
+        id: 'foo',
+        metadata: {},
+        updatedAt: 123,
+        value: {
+            bar: 'barval'
+        },
+        version: fetchResult.version
+    });
+}));
+
+test('run out of retries', hermeticTest(async (t, { dbClient }) => {
+    const dcc = new DataSlotCollection(dbClient.collection('foo'), {
+        log: t.log.bind(t)
+    });
+
+    await dcc.insert({
+        id: 'bar',
+        bazz: 'bazzval0'
+    });
+
+    const e = await t.throwsAsync(updateWithInterleaving(dcc, 'bar',
+        // This update will be preempted...
+        async v => {
+            v.bazz = 'bazzval1';
+            return v;
+        },
+
+        [
+            // ...by this update.
+            async v => {
+                v.bazz = 'bazzval2';
+                return v;
+            },
+
+            // ...and this update.
+            async v => {
+                v.bazz = 'bazzval3';
+                return v;
+            },
+
+            // ...and this update.
+            async v => {
+                v.bazz = 'bazzval4';
+                return v;
+            }
+        ], t.log.bind(t)
+    ));
+
+    t.is(e.code, 'EXHAUSTED_RETRIES');
 }));
