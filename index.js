@@ -25,16 +25,8 @@ module.exports = class DataSlotCollection {
     }
 
     async fetchById(id) {
-        let curRecord = await this.collection.findOne({ _id: id });
-        if (!curRecord) {
-            const defaultValue = this.buildMissingCartridgeValue(id);
-            curRecord = toMongoDoc(id, defaultValue,
-                    this.buildMetadata(defaultValue), undefined,
-                    undefined, undefined);
-        }
-
-        const value = extractKeysWithPrefix(curRecord, 'v_');
-        const metadata = extractKeysWithPrefix(curRecord, 'm_');
+        const { metadata, record: curRecord, value } =
+                await retrieveRecord.call(this, id);
 
         return {
             id,
@@ -102,14 +94,12 @@ module.exports = class DataSlotCollection {
         let tries = 0;
 
         do {
-            curRecord = await this.collection.findOne({ _id: id });
-
-            if (!curRecord) {
-                const defaultValue = this.buildMissingCartridgeValue(id);
-                curRecord = toMongoDoc(id, defaultValue,
-                        this.buildMetadata(defaultValue), undefined,
-                        undefined, undefined);
-            }
+            let oldMetadata, oldValue;
+            ({
+                metadata: oldMetadata,
+                record: curRecord,
+                value: oldValue
+            } = await retrieveRecord.call(this, id));
 
             if (expectedVersions !== undefined
                     && !expectedVersions.includes(curRecord.version)) {
@@ -118,8 +108,6 @@ module.exports = class DataSlotCollection {
                         + `${JSON.stringify(expectedVersions)}`);
             }
 
-            const oldValue = extractKeysWithPrefix(curRecord, 'v_');
-            const oldMetadata = extractKeysWithPrefix(curRecord, 'm_');
             newVersion = bs58.encode(crypto.randomBytes(8));
             newValue = await fn({ id, ...oldValue }, {
                 createdAt: curRecord.createdAt,
@@ -186,8 +174,8 @@ module.exports = class DataSlotCollection {
 
 function assertValidValue(v, desc) {
     if (typeof v !== 'object' || Array.isArray(v) || v === null) {
-        throw new Error(`${v} must be a non-array, non-null object. Was: `
-                + util.inspect(cartridge));
+        throw error('INVALID_VALUE', `${v} must be a non-array, non-null `
+                + `object. Was: ` + util.inspect(v));
     }
 }
 
@@ -235,6 +223,30 @@ function noSuchCartridge(description, details) {
     return e;
 }
 
+async function retrieveRecord(id) {
+    let record = await this.collection.findOne({ _id: id });
+
+    if (!record) {
+        const defaultValue = this.buildMissingCartridgeValue(id);
+
+        if ('id' in defaultValue && defaultValue.id !== id) {
+            throw new Error(`Defaults for missing cartridge values must have `
+                    + ` expected id: ${JSON.stringify(defaultValue.id)} !== `
+                    + `${JSON.stringify(id)}`);
+        }
+        delete defaultValue.id;
+
+        record = toMongoDoc(id, defaultValue,
+                this.buildMetadata(defaultValue), undefined,
+                undefined, undefined);
+    }
+
+    const value = extractKeysWithPrefix(record, 'v_');
+    const metadata = extractKeysWithPrefix(record, 'm_');
+
+    return { metadata, record, value };
+}
+
 function toMongoDoc(id, value, metadata, version, createdAt, now) {
     return {
         _id: id,
@@ -255,7 +267,7 @@ function validateAndNormalizeExpectedVersions(expectedVersions) {
 
         for (const v of expectedVersions) {
             if (!/\w{5,15}/.test(v)) {
-                throw new Error(`Invalid version: ${v}`);
+                throw error('INVALID_VERSION', `Invalid version: ${v}`);
             }
         }
     }

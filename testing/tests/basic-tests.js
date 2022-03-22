@@ -348,3 +348,83 @@ test('run out of retries', hermeticTest(async (t, { dbClient }) => {
 
     t.is(e.code, 'EXHAUSTED_RETRIES');
 }));
+
+test('bad value type', hermeticTest(async (t, { dbClient }) => {
+    const dcc = new DataSlotCollection(dbClient.collection('foo'), {
+        log: t.log.bind(t)
+    });
+
+    const e = await t.throwsAsync(dcc.insert(5));
+
+    t.is(e.code, 'INVALID_VALUE');
+}));
+
+test('array value', hermeticTest(async (t, { dbClient }) => {
+    const dcc = new DataSlotCollection(dbClient.collection('foo'), {
+        log: t.log.bind(t)
+    });
+
+    const e = await t.throwsAsync(dcc.insert([{id: 'foo'}]));
+
+    t.is(e.code, 'INVALID_VALUE');
+}));
+
+test('null value', hermeticTest(async (t, { dbClient }) => {
+    const dcc = new DataSlotCollection(dbClient.collection('foo'), {
+        log: t.log.bind(t)
+    });
+
+    const e = await t.throwsAsync(dcc.insert(null));
+
+    t.is(e.code, 'INVALID_VALUE');
+}));
+
+test('bad version string', hermeticTest(async (t, { dbClient }) => {
+    const dsc = new DataSlotCollection(dbClient.collection('foo'), {
+        log: t.log.bind(t)
+    });
+
+    const insertResult = dateToMs(await dsc.insert({
+        id: 'foo',
+        bar: 'barval',
+        bazz: 'bazzval'
+    }));
+
+    const e = await t.throwsAsync(dsc.updateById('foo', v => ({
+        id: v.id,
+        bar: v.bar,
+        plugh: 'plughval'
+    }), 'abc'));
+
+    t.is(e.code, 'INVALID_VERSION');
+}));
+
+test('fetch missing - default', hermeticTest(async (t, { dbClient }) => {
+    const dsc = new DataSlotCollection(dbClient.collection('foo'), {
+        log: t.log.bind(t)
+    });
+
+    const e = await t.throwsAsync(dsc.fetchById('foo'));
+
+    t.is(e.code, 'NO_SUCH_CARTRIDGE');
+}));
+
+test('fetch missing - non-default', hermeticTest(async (t, { dbClient }) => {
+    const dsc = new DataSlotCollection(dbClient.collection('foo'), {
+        buildMissingCartridgeValue: id => ({ bazz: 'bazzval' + id, id }),
+        log: t.log.bind(t)
+    });
+
+    const fetchResult = await dsc.fetchById('foo');
+
+    t.deepEqual(fetchResult, {
+        createdAt: undefined,
+        id: 'foo',
+        metadata: {},
+        updatedAt: undefined,
+        value: {
+            bazz: 'bazzvalfoo'
+        },
+        version: undefined
+    });
+}));
