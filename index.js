@@ -41,15 +41,15 @@ module.exports = class DataSlotCollection {
     async insert(initialValue, { overwrite = false } = {}) {
         assertValidValue(initialValue, 'initialValue');
 
-        if ('id' in initialValue) {
-            this.assertValidId(initialValue.id);
+        if (!('id' in initialValue)) {
+            throw error('INVALID_VALUE', 'Cartridge value must have id.');
         }
 
+        this.assertValidId(initialValue.id);
+
         const op = overwrite
-                ? async d => {
-                    const q = '_id' in d ? { _id: d._id } : {};
-                    await this.collection.replaceOne(q, d, { upsert: true });
-                }
+                ? d => this.collection.replaceOne(
+                        { _id: d._id }, d, { upsert: true })
                 : d => this.collection.insertOne(d);
 
         const metadata = doMetadata.call(this, initialValue);
@@ -182,21 +182,18 @@ function assertValidValue(v, desc) {
 function doMetadata(value) {
     const metadata = this.buildMetadata(value);
 
-    if (typeof metadata !== 'object' || Array.isArray(metadata)) {
-        throw new Error('buildMetadata must return a non-array object. '
-                + 'Returned: ' + util.inspect(metadata));
+    if (metadata && (typeof metadata !== 'object' || Array.isArray(metadata))) {
+        throw error('INVALID_METADATA_VALUE', 'buildMetadata must return a '
+                + 'non-array object. Returned: ' + util.inspect(metadata));
     }
 
-    return metadata;
+    return metadata || {};
 }
 
 function error(code, msg, cause) {
     const e = new Error(msg);
+    e.cause = cause;
     e.code = code;
-
-    if (cause) {
-        e.cause = cause;
-    }
 
     return e;
 }
@@ -209,10 +206,6 @@ function extractKeysWithPrefix(o, prefix) {
 }
 
 function mapTopLevelKeys(o, map) {
-    if (o === undefined) {
-        return o;
-    }
-
     return Object.fromEntries(Object.entries(o).map(([k, v]) => [map(k), v]));
 }
 
@@ -230,9 +223,10 @@ async function retrieveRecord(id) {
         const defaultValue = this.buildMissingCartridgeValue(id);
 
         if ('id' in defaultValue && defaultValue.id !== id) {
-            throw new Error(`Defaults for missing cartridge values must have `
-                    + ` expected id: ${JSON.stringify(defaultValue.id)} !== `
-                    + `${JSON.stringify(id)}`);
+            throw new Error('Defaults for missing '
+                    + 'cartridge values must have expected id: '
+                    + JSON.stringify(defaultValue.id) + ' !== '
+                    + JSON.stringify(id));
         }
         delete defaultValue.id;
 
@@ -248,8 +242,7 @@ async function retrieveRecord(id) {
 }
 
 function toMongoDoc(id, value, metadata, version, createdAt, now) {
-    return {
-        _id: id,
+    const result = {
         createdAt: createdAt || now,
         updatedAt: now,
         version,
@@ -257,6 +250,12 @@ function toMongoDoc(id, value, metadata, version, createdAt, now) {
         ...mapTopLevelKeys(metadata, k => `m_${k}`),
         ...mapTopLevelKeys(value, k => `v_${k}`)
     };
+
+    if (id) {
+        result._id = id;
+    }
+
+    return result;
 }
 
 function validateAndNormalizeExpectedVersions(expectedVersions) {

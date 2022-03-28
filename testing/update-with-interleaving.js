@@ -3,7 +3,7 @@
 const assert = require('assert');
 
 module.exports = async (dcc, id, update1, otherUpdates,
-        log = console.log.bind(console)) => {
+        { log = console.log.bind(console), updateOpts = {} } = {}) => {
 
     if (!Array.isArray(otherUpdates)) {
         otherUpdates = [otherUpdates];
@@ -53,7 +53,7 @@ module.exports = async (dcc, id, update1, otherUpdates,
         }
 
         return newValue;
-    });
+    }, undefined, updateOpts);
 
     let error;
     let i = 0;

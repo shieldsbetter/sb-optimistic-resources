@@ -262,7 +262,7 @@ test('interleaved updated', hermeticTest(async (t, { dbClient }) => {
             v.bazz = 'bazzval2';
 
             return v;
-        }, t.log.bind(t)
+        }, { log: t.log.bind(t) }
     );
 
     const fetchValue = await dcc.fetchById('bar');
@@ -343,7 +343,49 @@ test('run out of retries', hermeticTest(async (t, { dbClient }) => {
                 v.bazz = 'bazzval4';
                 return v;
             }
-        ], t.log.bind(t)
+        ], { log: t.log.bind(t) }
+    ));
+
+    t.is(e.code, 'EXHAUSTED_RETRIES');
+}));
+
+test('run out of retries - shouldRetry = true', hermeticTest(
+        async (t, { dbClient }) => {
+    const dcc = new DataSlotCollection(dbClient.collection('foo'), {
+        log: t.log.bind(t)
+    });
+
+    await dcc.insert({
+        id: 'bar',
+        bazz: 'bazzval0'
+    });
+
+    const e = await t.throwsAsync(updateWithInterleaving(dcc, 'bar',
+        // This update will be preempted...
+        async v => {
+            v.bazz = 'bazzval1';
+            return v;
+        },
+
+        [
+            // ...by this update.
+            async v => {
+                v.bazz = 'bazzval2';
+                return v;
+            },
+
+            // ...and this update.
+            async v => {
+                v.bazz = 'bazzval3';
+                return v;
+            },
+
+            // ...and this update.
+            async v => {
+                v.bazz = 'bazzval4';
+                return v;
+            }
+        ], { log: t.log.bind(t), updateOpts: { shouldRetry: true } }
     ));
 
     t.is(e.code, 'EXHAUSTED_RETRIES');
@@ -378,6 +420,17 @@ test('null value', hermeticTest(async (t, { dbClient }) => {
 
     t.is(e.code, 'INVALID_VALUE');
 }));
+
+test('no id', hermeticTest(async (t, { dbClient }) => {
+    const dcc = new DataSlotCollection(dbClient.collection('foo'), {
+        log: t.log.bind(t)
+    });
+
+    const e = await t.throwsAsync(dcc.insert({ foo: 'bar' }));
+
+    t.is(e.code, 'INVALID_VALUE');
+}));
+
 
 test('bad version string', hermeticTest(async (t, { dbClient }) => {
     const dsc = new DataSlotCollection(dbClient.collection('foo'), {
@@ -427,4 +480,101 @@ test('fetch missing - non-default', hermeticTest(async (t, { dbClient }) => {
         },
         version: undefined
     });
+}));
+
+test('(invalid) non-object buildMetadata',
+        hermeticTest(async (t, { dbClient }) => {
+    const dsc = new DataSlotCollection(dbClient.collection('foo'), {
+        buildMetadata: () => 5,
+        log: t.log.bind(t)
+    });
+
+    const e = await t.throwsAsync(dsc.insert({ id: 'foo' }));
+
+    t.is(e.code, 'INVALID_METADATA_VALUE');
+}));
+
+test('(invalid) array buildMetadata', hermeticTest(async (t, { dbClient }) => {
+    const dsc = new DataSlotCollection(dbClient.collection('foo'), {
+        buildMetadata: () => [],
+        log: t.log.bind(t)
+    });
+
+    const e = await t.throwsAsync(dsc.insert({ id: 'foo' }));
+
+    t.is(e.code, 'INVALID_METADATA_VALUE');
+}));
+
+test('buildMetadata returns undefined',
+        hermeticTest(async (t, { dbClient }) => {
+    const dsc = new DataSlotCollection(dbClient.collection('foo'), {
+        buildMetadata: () => {},
+        log: t.log.bind(t),
+        nower: () => 123
+    });
+
+    const insertResult = dateToMs(await dsc.insert({ id: 'foo' }));
+
+    t.deepEqual(insertResult, {
+        createdAt: 123,
+        id: 'foo',
+        metadata: {},
+        updatedAt: 123,
+        value: {},
+        version: insertResult.version
+    });
+}));
+
+test('buildMetadata returns null',
+        hermeticTest(async (t, { dbClient }) => {
+    const dsc = new DataSlotCollection(dbClient.collection('foo'), {
+        buildMetadata: () => null,
+        log: t.log.bind(t),
+        nower: () => 123
+    });
+
+    const insertResult = dateToMs(await dsc.insert({ id: 'foo' }));
+
+    t.deepEqual(insertResult, {
+        createdAt: 123,
+        id: 'foo',
+        metadata: {},
+        updatedAt: 123,
+        value: {},
+        version: insertResult.version
+    });
+}));
+
+test('fetch missing - bad id', hermeticTest(async (t, { dbClient }) => {
+    const dsc = new DataSlotCollection(dbClient.collection('foo'), {
+        buildMissingCartridgeValue: id => ({ bazz: 'bazzval' + id, id: 'bar' }),
+        log: t.log.bind(t)
+    });
+
+    const e = await t.throwsAsync(dsc.fetchById('foo'));
+
+    t.truthy(e.message.includes('expected id'));
+}));
+
+test('weird error during update', hermeticTest(async (t, { dbClient }) => {
+    const colClient = dbClient.collection('foo');
+    const dsc = new DataSlotCollection(colClient, {
+        log: t.log.bind(t)
+    });
+
+    await dsc.insert({
+        id: 'foo',
+        bar: 'barval',
+        bazz: 'bazzval'
+    });
+
+    colClient.replaceOneError = new Error('out of cheese');
+    const error = await t.throwsAsync(dsc.updateById('foo', v => ({
+        id: v.id,
+        bar: v.bar,
+        plugh: 'plughval'
+    })));
+
+    t.is(error.code, 'UNEXPECTED_ERROR');
+    t.is(error.cause.message, 'out of cheese');
 }));

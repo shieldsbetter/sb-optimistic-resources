@@ -39,6 +39,10 @@ function fakeMongoCollectionClient(docs, log) {
         },
 
         async replaceOne(q, d, opts = {}) {
+            if (this.replaceOneError) {
+                throw this.replaceOneError;
+            }
+
             const index = docs.findIndex(sift(q));
             const matches = docs.filter(sift(q));
 
