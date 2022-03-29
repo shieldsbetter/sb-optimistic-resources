@@ -6,36 +6,73 @@ const hermeticTest = require('../hermetic-test');
 const test = require('ava');
 const updateWithInterleaving = require('../update-with-interleaving');
 
-test('basic insert and fetch', hermeticTest(async (t, { dbClient }) => {
+test('basic insert and fetch - with id',
+        hermeticTest(async (t, { dbClient }) => {
     const dsc = new DataSlotCollection(dbClient.collection('foo'), {
         log: t.log.bind(t),
         nower: () => 123
     });
 
-    const insertResult = dateToMs(await dsc.insert({
-        id: 'foo',
+    const insertResult = dateToMs(await dsc.insertOne({
+        _id: 'foo',
         bar: 'barval'
     }));
 
     t.deepEqual(insertResult, {
         createdAt: 123,
-        id: 'foo',
         metadata: {},
         updatedAt: 123,
         value: {
+            _id: 'foo',
             bar: 'barval'
         },
         version: insertResult.version
     });
 
-    const fetchResult = dateToMs(await dsc.fetchById('foo'));
+    const fetchResult = dateToMs(await dsc.findOne({ _id: 'foo' }));
 
     t.deepEqual(fetchResult, {
         createdAt: 123,
-        id: 'foo',
         metadata: {},
         updatedAt: 123,
         value: {
+            _id: 'foo',
+            bar: 'barval'
+        },
+        version: insertResult.version
+    });
+}));
+
+test('basic insert and fetch - no id', hermeticTest(async (t, { dbClient }) => {
+    const dsc = new DataSlotCollection(dbClient.collection('foo'), {
+        log: t.log.bind(t),
+        nower: () => 123
+    });
+
+    const insertResult = dateToMs(await dsc.insertOne({
+        bar: 'barval'
+    }));
+
+    t.deepEqual(insertResult, {
+        createdAt: 123,
+        metadata: {},
+        updatedAt: 123,
+        value: {
+            _id: insertResult.value._id,
+            bar: 'barval'
+        },
+        version: insertResult.version
+    });
+
+    const fetchResult = dateToMs(
+            await dsc.findOne({ _id: insertResult.value._id }));
+
+    t.deepEqual(fetchResult, {
+        createdAt: 123,
+        metadata: {},
+        updatedAt: 123,
+        value: {
+            _id: insertResult.value._id,
             bar: 'barval'
         },
         version: insertResult.version
@@ -51,25 +88,25 @@ test('basic insert, update, and fetch',
         nower: () => now
     });
 
-    const insertResult = dateToMs(await dsc.insert({
-        id: 'foo',
+    const insertResult = dateToMs(await dsc.insertOne({
+        _id: 'foo',
         bar: 'barval',
         bazz: 'bazzval'
     }));
 
     now = 124;
-    const updateResult = dateToMs(await dsc.updateById('foo', v => ({
-        id: v.id,
+    const updateResult = dateToMs(await dsc.updateOne({ _id: 'foo' }, v => ({
+        _id: v._id,
         bar: v.bar,
         plugh: 'plughval'
     })));
 
     t.deepEqual(updateResult, {
         createdAt: 123,
-        id: 'foo',
         metadata: {},
         updatedAt: 124,
         value: {
+            _id: 'foo',
             bar: 'barval',
             plugh: 'plughval'
         },
@@ -78,99 +115,18 @@ test('basic insert, update, and fetch',
 
     t.not(updateResult.version, insertResult.version);
 
-    const fetchResult = dateToMs(await dsc.fetchById('foo'));
+    const fetchResult = dateToMs(await dsc.findOne({ _id: 'foo' }));
 
     t.deepEqual(fetchResult, {
         createdAt: 123,
-        id: 'foo',
         metadata: {},
         updatedAt: 124,
         value: {
+            _id: 'foo',
             bar: 'barval',
             plugh: 'plughval'
         },
         version: updateResult.version
-    });
-}));
-
-test('insert w/ overwrite (doesn\'t exist)',
-        hermeticTest(async (t, { dbClient }) => {
-    const dsc = new DataSlotCollection(dbClient.collection('foo'), {
-        log: t.log.bind(t),
-        nower: () => 123
-    });
-
-    const insertResult = dateToMs(await dsc.insert({
-        id: 'foo',
-        bar: 'barval'
-    }, { overwrite: true }));
-
-    t.deepEqual(insertResult, {
-        createdAt: 123,
-        id: 'foo',
-        metadata: {},
-        updatedAt: 123,
-        value: {
-            bar: 'barval'
-        },
-        version: insertResult.version
-    });
-
-    const fetchResult = dateToMs(await dsc.fetchById('foo'));
-
-    t.deepEqual(fetchResult, {
-        createdAt: 123,
-        id: 'foo',
-        metadata: {},
-        updatedAt: 123,
-        value: {
-            bar: 'barval'
-        },
-        version: insertResult.version
-    });
-}));
-
-test('insert w/ overwrite (does exist)',
-        hermeticTest(async (t, { dbClient }) => {
-    const dsc = new DataSlotCollection(dbClient.collection('foo'), {
-        log: t.log.bind(t),
-        nower: () => 123
-    });
-
-    const insertResult1 = dateToMs(await dsc.insert({
-        id: 'foo',
-        bar: 'barval'
-    }));
-
-    const insertResult2 = dateToMs(await dsc.insert({
-        id: 'foo',
-        bazz: 'bazzval'
-    }, { overwrite: true }));
-
-    t.not(insertResult1.version, insertResult2.version);
-
-    t.deepEqual(insertResult2, {
-        createdAt: 123,
-        id: 'foo',
-        metadata: {},
-        updatedAt: 123,
-        value: {
-            bazz: 'bazzval'
-        },
-        version: insertResult2.version
-    });
-
-    const fetchResult = dateToMs(await dsc.fetchById('foo'));
-
-    t.deepEqual(fetchResult, {
-        createdAt: 123,
-        id: 'foo',
-        metadata: {},
-        updatedAt: 123,
-        value: {
-            bazz: 'bazzval'
-        },
-        version: insertResult2.version
     });
 }));
 
@@ -179,14 +135,14 @@ test('assert wrong version', hermeticTest(async (t, { dbClient }) => {
         log: t.log.bind(t)
     });
 
-    await dsc.insert({
-        id: 'foo',
+    await dsc.insertOne({
+        _id: 'foo',
         bar: 'barval',
         bazz: 'bazzval'
     });
 
-    const error = await t.throwsAsync(dsc.updateById('foo', v => ({
-        id: v.id,
+    const error = await t.throwsAsync(dsc.updateOne({ _id: 'foo' }, v => ({
+        _id: v._id,
         bar: v.bar,
         plugh: 'plughval'
     }), 'abcdefghi'));
@@ -199,14 +155,14 @@ test('assert correct version', hermeticTest(async (t, { dbClient }) => {
         log: t.log.bind(t)
     });
 
-    const insertResult = dateToMs(await dsc.insert({
-        id: 'foo',
+    const insertResult = dateToMs(await dsc.insertOne({
+        _id: 'foo',
         bar: 'barval',
         bazz: 'bazzval'
     }));
 
-    await dsc.updateById('foo', v => ({
-        id: v.id,
+    await dsc.updateOne({ _id: 'foo' }, v => ({
+        _id: v._id,
         bar: v.bar,
         plugh: 'plughval'
     }), insertResult.version);
@@ -219,14 +175,14 @@ test('cannot update id', hermeticTest(async (t, { dbClient }) => {
         log: t.log.bind(t)
     });
 
-    const insertResult = dateToMs(await dsc.insert({
-        id: 'foo',
+    const insertResult = dateToMs(await dsc.insertOne({
+        _id: 'foo',
         bar: 'barval',
         bazz: 'bazzval'
     }));
 
-    const e = await t.throwsAsync(dsc.updateById('foo', v => ({
-        id: 'waldo',
+    const e = await t.throwsAsync(dsc.updateOne({ _id: 'foo' }, v => ({
+        _id: 'waldo',
         bar: v.bar,
         plugh: 'plughval'
     }), insertResult.version));
@@ -239,12 +195,12 @@ test('interleaved updated', hermeticTest(async (t, { dbClient }) => {
         log: t.log.bind(t)
     });
 
-    await dcc.insert({
-        id: 'bar',
+    await dcc.insertOne({
+        _id: 'bar',
         bazz: 'bazzval0'
     });
 
-    await updateWithInterleaving(dcc, 'bar',
+    await updateWithInterleaving(dcc, { _id: 'bar' },
         // This update will be preempted...
         async v => {
             // This will run twice, once before and once after the interleaving
@@ -265,20 +221,10 @@ test('interleaved updated', hermeticTest(async (t, { dbClient }) => {
         }, { log: t.log.bind(t) }
     );
 
-    const fetchValue = await dcc.fetchById('bar');
+    const fetchValue = await dcc.findOne({ _id: 'bar' });
 
     // Update #2 happened first, and then update #1 retried...
     t.is(fetchValue.value.bazz, 'bazzval1');
-}));
-
-test('default missing cartridge', hermeticTest(async (t, { dbClient }) => {
-    const dcc = new DataSlotCollection(dbClient.collection('foo'), {
-        log: t.log.bind(t)
-    });
-
-    const e = await t.throwsAsync(dcc.updateById('foo', () => ({ id: 'foo' })));
-
-    t.is(e.code, 'NO_SUCH_CARTRIDGE');
 }));
 
 test('no update', hermeticTest(async (t, { dbClient }) => {
@@ -287,21 +233,21 @@ test('no update', hermeticTest(async (t, { dbClient }) => {
         nower: () => 123
     });
 
-    await dcc.insert({
-        id: 'foo',
+    await dcc.insertOne({
+        _id: 'foo',
         bar: 'barval'
     });
 
-    await dcc.updateById('foo', () => {})
+    await dcc.updateOne({ _id: 'foo' }, () => {})
 
-    const fetchResult = dateToMs(await dcc.fetchById('foo'));
+    const fetchResult = dateToMs(await dcc.findOne({ _id: 'foo' }));
 
     t.deepEqual(fetchResult, {
         createdAt: 123,
-        id: 'foo',
         metadata: {},
         updatedAt: 123,
         value: {
+            _id: 'foo',
             bar: 'barval'
         },
         version: fetchResult.version
@@ -313,12 +259,12 @@ test('run out of retries', hermeticTest(async (t, { dbClient }) => {
         log: t.log.bind(t)
     });
 
-    await dcc.insert({
-        id: 'bar',
+    await dcc.insertOne({
+        _id: 'bar',
         bazz: 'bazzval0'
     });
 
-    const e = await t.throwsAsync(updateWithInterleaving(dcc, 'bar',
+    const e = await t.throwsAsync(updateWithInterleaving(dcc, { _id: 'bar' },
         // This update will be preempted...
         async v => {
             v.bazz = 'bazzval1';
@@ -355,12 +301,12 @@ test('run out of retries - shouldRetry = true', hermeticTest(
         log: t.log.bind(t)
     });
 
-    await dcc.insert({
-        id: 'bar',
+    await dcc.insertOne({
+        _id: 'bar',
         bazz: 'bazzval0'
     });
 
-    const e = await t.throwsAsync(updateWithInterleaving(dcc, 'bar',
+    const e = await t.throwsAsync(updateWithInterleaving(dcc, { _id: 'bar' },
         // This update will be preempted...
         async v => {
             v.bazz = 'bazzval1';
@@ -396,7 +342,7 @@ test('bad value type', hermeticTest(async (t, { dbClient }) => {
         log: t.log.bind(t)
     });
 
-    const e = await t.throwsAsync(dcc.insert(5));
+    const e = await t.throwsAsync(dcc.insertOne(5));
 
     t.is(e.code, 'INVALID_VALUE');
 }));
@@ -406,7 +352,7 @@ test('array value', hermeticTest(async (t, { dbClient }) => {
         log: t.log.bind(t)
     });
 
-    const e = await t.throwsAsync(dcc.insert([{id: 'foo'}]));
+    const e = await t.throwsAsync(dcc.insertOne([{id: 'foo'}]));
 
     t.is(e.code, 'INVALID_VALUE');
 }));
@@ -416,35 +362,24 @@ test('null value', hermeticTest(async (t, { dbClient }) => {
         log: t.log.bind(t)
     });
 
-    const e = await t.throwsAsync(dcc.insert(null));
+    const e = await t.throwsAsync(dcc.insertOne(null));
 
     t.is(e.code, 'INVALID_VALUE');
 }));
-
-test('no id', hermeticTest(async (t, { dbClient }) => {
-    const dcc = new DataSlotCollection(dbClient.collection('foo'), {
-        log: t.log.bind(t)
-    });
-
-    const e = await t.throwsAsync(dcc.insert({ foo: 'bar' }));
-
-    t.is(e.code, 'INVALID_VALUE');
-}));
-
 
 test('bad version string', hermeticTest(async (t, { dbClient }) => {
     const dsc = new DataSlotCollection(dbClient.collection('foo'), {
         log: t.log.bind(t)
     });
 
-    const insertResult = dateToMs(await dsc.insert({
-        id: 'foo',
+    const insertResult = dateToMs(await dsc.insertOne({
+        _id: 'foo',
         bar: 'barval',
         bazz: 'bazzval'
     }));
 
-    const e = await t.throwsAsync(dsc.updateById('foo', v => ({
-        id: v.id,
+    const e = await t.throwsAsync(dsc.updateOne({ _id: 'foo' }, v => ({
+        _id: v._id,
         bar: v.bar,
         plugh: 'plughval'
     }), 'abc'));
@@ -452,34 +387,14 @@ test('bad version string', hermeticTest(async (t, { dbClient }) => {
     t.is(e.code, 'INVALID_VERSION');
 }));
 
-test('fetch missing - default', hermeticTest(async (t, { dbClient }) => {
+test('fetch missing', hermeticTest(async (t, { dbClient }) => {
     const dsc = new DataSlotCollection(dbClient.collection('foo'), {
         log: t.log.bind(t)
     });
 
-    const e = await t.throwsAsync(dsc.fetchById('foo'));
+    const e = await t.throwsAsync(dsc.findOne({ _id: 'foo' }));
 
     t.is(e.code, 'NO_SUCH_CARTRIDGE');
-}));
-
-test('fetch missing - non-default', hermeticTest(async (t, { dbClient }) => {
-    const dsc = new DataSlotCollection(dbClient.collection('foo'), {
-        buildMissingCartridgeValue: id => ({ bazz: 'bazzval' + id, id }),
-        log: t.log.bind(t)
-    });
-
-    const fetchResult = await dsc.fetchById('foo');
-
-    t.deepEqual(fetchResult, {
-        createdAt: undefined,
-        id: 'foo',
-        metadata: {},
-        updatedAt: undefined,
-        value: {
-            bazz: 'bazzvalfoo'
-        },
-        version: undefined
-    });
 }));
 
 test('(invalid) non-object buildMetadata',
@@ -489,7 +404,7 @@ test('(invalid) non-object buildMetadata',
         log: t.log.bind(t)
     });
 
-    const e = await t.throwsAsync(dsc.insert({ id: 'foo' }));
+    const e = await t.throwsAsync(dsc.insertOne({ id: 'foo' }));
 
     t.is(e.code, 'INVALID_METADATA_VALUE');
 }));
@@ -500,7 +415,7 @@ test('(invalid) array buildMetadata', hermeticTest(async (t, { dbClient }) => {
         log: t.log.bind(t)
     });
 
-    const e = await t.throwsAsync(dsc.insert({ id: 'foo' }));
+    const e = await t.throwsAsync(dsc.insertOne({ id: 'foo' }));
 
     t.is(e.code, 'INVALID_METADATA_VALUE');
 }));
@@ -513,14 +428,13 @@ test('buildMetadata returns undefined',
         nower: () => 123
     });
 
-    const insertResult = dateToMs(await dsc.insert({ id: 'foo' }));
+    const insertResult = dateToMs(await dsc.insertOne({ _id: 'foo' }));
 
     t.deepEqual(insertResult, {
         createdAt: 123,
-        id: 'foo',
         metadata: {},
         updatedAt: 123,
-        value: {},
+        value: { _id: 'foo' },
         version: insertResult.version
     });
 }));
@@ -533,27 +447,15 @@ test('buildMetadata returns null',
         nower: () => 123
     });
 
-    const insertResult = dateToMs(await dsc.insert({ id: 'foo' }));
+    const insertResult = dateToMs(await dsc.insertOne({ _id: 'foo' }));
 
     t.deepEqual(insertResult, {
         createdAt: 123,
-        id: 'foo',
         metadata: {},
         updatedAt: 123,
-        value: {},
+        value: { _id: 'foo' },
         version: insertResult.version
     });
-}));
-
-test('fetch missing - bad id', hermeticTest(async (t, { dbClient }) => {
-    const dsc = new DataSlotCollection(dbClient.collection('foo'), {
-        buildMissingCartridgeValue: id => ({ bazz: 'bazzval' + id, id: 'bar' }),
-        log: t.log.bind(t)
-    });
-
-    const e = await t.throwsAsync(dsc.fetchById('foo'));
-
-    t.truthy(e.message.includes('expected id'));
 }));
 
 test('weird error during update', hermeticTest(async (t, { dbClient }) => {
@@ -562,15 +464,15 @@ test('weird error during update', hermeticTest(async (t, { dbClient }) => {
         log: t.log.bind(t)
     });
 
-    await dsc.insert({
-        id: 'foo',
+    await dsc.insertOne({
+        _id: 'foo',
         bar: 'barval',
         bazz: 'bazzval'
     });
 
     colClient.replaceOneError = new Error('out of cheese');
-    const error = await t.throwsAsync(dsc.updateById('foo', v => ({
-        id: v.id,
+    const error = await t.throwsAsync(dsc.updateOne({ _id: 'foo' }, v => ({
+        _id: v._id,
         bar: v.bar,
         plugh: 'plughval'
     })));

@@ -2,67 +2,60 @@
 
 const bs58 = require('bs58');
 const crypto = require('crypto');
+const ObjectId = require("bson-objectid");
 const util = require('util');
 
 module.exports = class DataSlotCollection {
     constructor(collection, {
-        assertValidId = () => {},
         buildMetadata = () => ({}),
-        buildMissingCartridgeValue = id => {
-            throw noSuchCartridge(`id ${id}`, { id });
-        },
         log = console.log.bind(console),
         nower = Date.now,
         ...otherOpts
     } = {}) {
-        this.assertValidId = assertValidId;
         this.buildMetadata = buildMetadata;
-        this.buildMissingCartridgeValue = buildMissingCartridgeValue;
         this.collection = collection;
         this.log = log;
         this.nower = nower;
         this.setTimeout = otherOpts.setTimeout || setTimeout;
     }
 
-    async fetchById(id) {
-        const { metadata, record: curRecord, value } =
-                await retrieveRecord.call(this, id);
+    async findOne(q) {
+        const record = await this.collection.findOne(q);
+
+        if (!record) {
+            throw error('NO_SUCH_CARTRIDGE',
+                    'No cartridge for query ' + util.inspect(q));
+        }
+
+        const value = extractKeysWithPrefix(record, 'v_');
+        value._id = record._id;
+
+        const metadata = extractKeysWithPrefix(record, 'm_');
 
         return {
-            id,
-            createdAt: curRecord.createdAt,
+            createdAt: record.createdAt,
             metadata,
-            updatedAt: curRecord.updatedAt,
+            updatedAt: record.updatedAt,
             value,
-            version: curRecord.version
+            version: record.version
         };
     }
 
-    async insert(initialValue, { overwrite = false } = {}) {
+    async insertOne(initialValue) {
         assertValidValue(initialValue, 'initialValue');
 
-        if (!('id' in initialValue)) {
-            throw error('INVALID_VALUE', 'Cartridge value must have id.');
+        if (!('_id' in initialValue)) {
+            initialValue._id = ObjectId();
         }
 
-        this.assertValidId(initialValue.id);
-
-        const op = overwrite
-                ? d => this.collection.replaceOne(
-                        { _id: d._id }, d, { upsert: true })
-                : d => this.collection.insertOne(d);
-
         const metadata = doMetadata.call(this, initialValue);
-        const id = initialValue.id;
         const now = new Date(this.nower());
         const version = bs58.encode(crypto.randomBytes(8));
 
-        delete initialValue.id;
-
-        await op(toMongoDoc(id, initialValue, metadata, version, now, now));
+        await this.collection.insertOne(
+                toMongoDoc(initialValue, metadata, version, now, now));
 
         return {
-            id,
             createdAt: now,
             metadata,
             updatedAt: now,
@@ -71,7 +64,7 @@ module.exports = class DataSlotCollection {
         };
     }
 
-    async updateById(id, fn, expectedVersions, { shouldRetry } = {}) {
+    async updateOne(q, fn, expectedVersions, { shouldRetry } = {}) {
         if (!shouldRetry || shouldRetry === true) {
             shouldRetry = async tries => {
                 await new Promise(resolve => this.setTimeout(resolve, 200));
@@ -79,8 +72,6 @@ module.exports = class DataSlotCollection {
                 return tries < 3
             };
         }
-
-        this.assertValidId(id);
 
         expectedVersions =
                 validateAndNormalizeExpectedVersions(expectedVersions);
@@ -95,11 +86,7 @@ module.exports = class DataSlotCollection {
 
         do {
             let oldMetadata, oldValue;
-            ({
-                metadata: oldMetadata,
-                record: curRecord,
-                value: oldValue
-            } = await retrieveRecord.call(this, id));
+            curRecord = await this.findOne(q);
 
             if (expectedVersions !== undefined
                     && !expectedVersions.includes(curRecord.version)) {
@@ -109,19 +96,14 @@ module.exports = class DataSlotCollection {
             }
 
             newVersion = bs58.encode(crypto.randomBytes(8));
-            newValue = await fn({ id, ...oldValue }, {
-                createdAt: curRecord.createdAt,
-                metadata: oldMetadata,
-                updatedAt: curRecord.updatedAt,
-                version: newVersion
-            });
+            newValue = await fn(curRecord.value, curRecord);
 
             if (newValue) {
-                if ('id' in newValue && newValue.id !== id) {
+                if ('_id' in newValue && newValue._id !== curRecord.value._id) {
                     throw error('INVALID_UPDATE',
-                            `Cannot modify id. ${id} =/=> ${newValue.id}`);
+                            `Cannot modify _id. ${newValue._id} =/=> `
+                            + `${curRecord.value._id}`);
                 }
-                delete newValue.id;
 
                 assertValidValue(newValue, 'Result of update function');
 
@@ -131,8 +113,11 @@ module.exports = class DataSlotCollection {
                 try {
                     const { matchedCount, upsertedCount } =
                             await this.collection.replaceOne(
-                                    { _id: id, version: curRecord.version },
-                                    toMongoDoc(id, newValue, newMetadata,
+                                    {
+                                        _id: curRecord.value._id,
+                                        version: curRecord.version
+                                    },
+                                    toMongoDoc(newValue, newMetadata,
                                             newVersion,
                                             curRecord.createdAt,
                                             now),
@@ -158,11 +143,11 @@ module.exports = class DataSlotCollection {
 
         if (!success) {
             throw error('EXHAUSTED_RETRIES',
-                    'Ran out of retries attempting to update ' + id);
+                    'Ran out of retries attempting to update by query '
+                    + util.inspect(q));
         }
 
         return {
-            id,
             createdAt: curRecord.createdAt,
             metadata: newMetadata,
             updatedAt: now,
@@ -209,50 +194,21 @@ function mapTopLevelKeys(o, map) {
     return Object.fromEntries(Object.entries(o).map(([k, v]) => [map(k), v]));
 }
 
-function noSuchCartridge(description, details) {
-    const e = new Error(`No such cartridge: ${description}`);
-    e.code = 'NO_SUCH_CARTRIDGE';
-    e.details = { description, ...details };
-    return e;
-}
+function toMongoDoc(value, metadata, version, createdAt, now) {
+    const valueWithoutId = { ...value };
+    delete valueWithoutId._id;
 
-async function retrieveRecord(id) {
-    let record = await this.collection.findOne({ _id: id });
-
-    if (!record) {
-        const defaultValue = this.buildMissingCartridgeValue(id);
-
-        if ('id' in defaultValue && defaultValue.id !== id) {
-            throw new Error('Defaults for missing '
-                    + 'cartridge values must have expected id: '
-                    + JSON.stringify(defaultValue.id) + ' !== '
-                    + JSON.stringify(id));
-        }
-        delete defaultValue.id;
-
-        record = toMongoDoc(id, defaultValue,
-                this.buildMetadata(defaultValue), undefined,
-                undefined, undefined);
-    }
-
-    const value = extractKeysWithPrefix(record, 'v_');
-    const metadata = extractKeysWithPrefix(record, 'm_');
-
-    return { metadata, record, value };
-}
-
-function toMongoDoc(id, value, metadata, version, createdAt, now) {
     const result = {
-        createdAt: createdAt || now,
+        createdAt,
         updatedAt: now,
         version,
 
         ...mapTopLevelKeys(metadata, k => `m_${k}`),
-        ...mapTopLevelKeys(value, k => `v_${k}`)
+        ...mapTopLevelKeys(valueWithoutId, k => `v_${k}`)
     };
 
-    if (id) {
-        result._id = id;
+    if (value._id) {
+        result._id = value._id;
     }
 
     return result;

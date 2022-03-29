@@ -1,10 +1,15 @@
 'use strict';
 
+const ObjectID = require('bson-objectid');
+
 module.exports = function datesToMs(o) {
     let result;
 
     if (o === null) {
         result = null;
+    }
+    else if (o instanceof ObjectID) {
+        result = o;
     }
     else if (Array.isArray(o)) {
         result = o.map(el => el instanceof Date ? el.valueOf() : datesToMs(el));

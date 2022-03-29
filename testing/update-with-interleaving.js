@@ -2,7 +2,7 @@
 
 const assert = require('assert');
 
-module.exports = async (dcc, id, update1, otherUpdates,
+module.exports = async (dcc, q, update1, otherUpdates,
         { log = console.log.bind(console), updateOpts = {} } = {}) => {
 
     if (!Array.isArray(otherUpdates)) {
@@ -25,7 +25,7 @@ module.exports = async (dcc, id, update1, otherUpdates,
 
     let moreInterleaving = true;
 
-    const primaryPr = dcc.updateById(id, async (...args) => {
+    const primaryPr = dcc.updateOne(q, async (...args) => {
         if (moreInterleaving) {
             phase2Latch = new Promise(r => { phase2Release = r; });
 
@@ -69,7 +69,7 @@ module.exports = async (dcc, id, update1, otherUpdates,
         phase4Latch = null;
 
         try {
-            await dcc.updateById(id, async (...args) => {
+            await dcc.updateOne(q, async (...args) => {
                 const result = await otherUpdate(...args);
                 return result;
             });

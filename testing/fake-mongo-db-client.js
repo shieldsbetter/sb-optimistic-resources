@@ -1,7 +1,17 @@
 'use strict';
 
-const clone = require('clone');
+const doClone = require('clone');
+const ObjectID = require('bson-objectid');
 const sift = require('sift');
+
+function clone(c) {
+    // Let's just keep this easy...
+    if (c instanceof ObjectID) {
+        return c;
+    }
+
+    return doClone(c);
+}
 
 module.exports = (log) => {
     const collections = {};

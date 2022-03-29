@@ -21,6 +21,7 @@
   },
   "dependencies": {
     "bs58": "^5.0.0",
+    "bson-objectid": "^2.0.3",
     "clone": "^2.1.2"
   }
 }
