@@ -20,7 +20,6 @@ test('basic insert and fetch - with id',
 
     t.deepEqual(insertResult, {
         createdAt: 123,
-        metadata: {},
         updatedAt: 123,
         value: {
             _id: 'foo',
@@ -33,7 +32,6 @@ test('basic insert and fetch - with id',
 
     t.deepEqual(fetchResult, {
         createdAt: 123,
-        metadata: {},
         updatedAt: 123,
         value: {
             _id: 'foo',
@@ -55,7 +53,6 @@ test('basic insert and fetch - no id', hermeticTest(async (t, { dbClient }) => {
 
     t.deepEqual(insertResult, {
         createdAt: 123,
-        metadata: {},
         updatedAt: 123,
         value: {
             _id: insertResult.value._id,
@@ -69,7 +66,6 @@ test('basic insert and fetch - no id', hermeticTest(async (t, { dbClient }) => {
 
     t.deepEqual(fetchResult, {
         createdAt: 123,
-        metadata: {},
         updatedAt: 123,
         value: {
             _id: insertResult.value._id,
@@ -103,7 +99,6 @@ test('basic insert, update, and fetch',
 
     t.deepEqual(updateResult, {
         createdAt: 123,
-        metadata: {},
         updatedAt: 124,
         value: {
             _id: 'foo',
@@ -119,7 +114,6 @@ test('basic insert, update, and fetch',
 
     t.deepEqual(fetchResult, {
         createdAt: 123,
-        metadata: {},
         updatedAt: 124,
         value: {
             _id: 'foo',
@@ -244,7 +238,6 @@ test('no update', hermeticTest(async (t, { dbClient }) => {
 
     t.deepEqual(fetchResult, {
         createdAt: 123,
-        metadata: {},
         updatedAt: 123,
         value: {
             _id: 'foo',
@@ -394,68 +387,7 @@ test('fetch missing', hermeticTest(async (t, { dbClient }) => {
 
     const e = await t.throwsAsync(dsc.findOne({ _id: 'foo' }));
 
-    t.is(e.code, 'NO_SUCH_CARTRIDGE');
-}));
-
-test('(invalid) non-object buildMetadata',
-        hermeticTest(async (t, { dbClient }) => {
-    const dsc = new DataSlotCollection(dbClient.collection('foo'), {
-        buildMetadata: () => 5,
-        log: t.log.bind(t)
-    });
-
-    const e = await t.throwsAsync(dsc.insertOne({ id: 'foo' }));
-
-    t.is(e.code, 'INVALID_METADATA_VALUE');
-}));
-
-test('(invalid) array buildMetadata', hermeticTest(async (t, { dbClient }) => {
-    const dsc = new DataSlotCollection(dbClient.collection('foo'), {
-        buildMetadata: () => [],
-        log: t.log.bind(t)
-    });
-
-    const e = await t.throwsAsync(dsc.insertOne({ id: 'foo' }));
-
-    t.is(e.code, 'INVALID_METADATA_VALUE');
-}));
-
-test('buildMetadata returns undefined',
-        hermeticTest(async (t, { dbClient }) => {
-    const dsc = new DataSlotCollection(dbClient.collection('foo'), {
-        buildMetadata: () => {},
-        log: t.log.bind(t),
-        nower: () => 123
-    });
-
-    const insertResult = dateToMs(await dsc.insertOne({ _id: 'foo' }));
-
-    t.deepEqual(insertResult, {
-        createdAt: 123,
-        metadata: {},
-        updatedAt: 123,
-        value: { _id: 'foo' },
-        version: insertResult.version
-    });
-}));
-
-test('buildMetadata returns null',
-        hermeticTest(async (t, { dbClient }) => {
-    const dsc = new DataSlotCollection(dbClient.collection('foo'), {
-        buildMetadata: () => null,
-        log: t.log.bind(t),
-        nower: () => 123
-    });
-
-    const insertResult = dateToMs(await dsc.insertOne({ _id: 'foo' }));
-
-    t.deepEqual(insertResult, {
-        createdAt: 123,
-        metadata: {},
-        updatedAt: 123,
-        value: { _id: 'foo' },
-        version: insertResult.version
-    });
+    t.is(e.code, 'NO_SUCH_ENTITY');
 }));
 
 test('weird error during update', hermeticTest(async (t, { dbClient }) => {

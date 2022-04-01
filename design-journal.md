@@ -1,5 +1,67 @@
 # Design Journal
 
+## Rethinking vocabulary
+
+### The problem
+
+Ideally, we'd just call the value you shove into Mongo through this library a
+"document" for consistency with Mongo's terminology. But that leads to something
+I think is a confusing mismatch:
+
+The client's logical document might be `{ _id: "foo", bar: "barval" }`, but the
+document as stored in Mongo might look like `{ _id: "foo", createdAt: 123,
+updatedAt: 123, version: "abcdef", v_bar: "barval", m_bazz: "bazzmetaval" }`. So
+there are two ideas of "document" in play.
+
+Do we try to just be really consistent about referring to these as the "Mongo
+document" and the "logical document"? If so, it would be helpful to have a
+_name_ for this library so that we can call them the "Mongo document" and the
+"Foo document", but any descriptive name would be a mouthful, "Mongo Optimistic
+Locking Library Document" vs "Mongo Document" is both wordy and still seems open
+to confusion. Also, "client document" and "logical document" quickly fall down
+for the usual reason that one person's client/logical is another person's
+server/physical.
+
+My initial impulse was to establish a "second level" vocabulary for client
+objects and I naively landed on the word "cartridge" for the client's logical
+document, since you always retrieve it as a whole, "pop it out", modify it, then
+write it back. It's not a perfect metaphor--"popping out" the cartridge doesn't
+actually "lock" it, but maybe it's good enough?
+
+But additionally, the actual structure given back to you by the library is
+currently shaped like: `{ createdAt, metadata, updatedAt, value, version }`. Is
+that structure the cartridge? Or should `value` be renamed `cartridge` and this
+is simply the result object? Is this not all metadata? What do we call the stuff
+currently stored in `metadata`? The `metacartridge`?
+
+An alternative might be to choose a suggestive adjective to go with "document".
+Given that the impulse here is to aid rapid prototyping by allowing you to
+"never leave javascript", we could imagine referring to the client document as
+the "hydrated document" or the "active document", with the corresponding Mongo
+document being the "frozen document" or the "document of record". We might even
+just refer to the client document as "The POJO" and the Mongo doc as the "Mongo
+document".
+
+We could just invent some terminology. Perhaps the client doc is the "optdoc"
+(optimistic document?) with the corresponding Mongo doc simply the "Mongo doc"?
+
+Given that my immediate plan for this library is as a bridge between REST APIs
+and the database (for easy application of JSON-patches, etc.), perhaps we call
+the client document the "entity value", which happens to be constrained to be
+Mongo-like. I don't hate that. This library could be the "sb-optimistic-entity",
+you work with entity values in an entity collection, backed by Mongo docs in a
+Mongo collection.
+
+Still should probably rename metadata. Probably it should simply be removed--
+it's a useful feature, but unrelated to the optimistic locking and easy to layer
+in later.
+
+### My verdict
+
+I'm going to call this `sb-optimistic-entities`. The client will work with
+_entity values_ that are recorded as Mongo docs. I'm removing metadata
+altogether--it's confusing and unrelated to the core functionality.
+
 ## Versioning under replacement and deletion
 
 ### The problem

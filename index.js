@@ -6,14 +6,12 @@ const util = require('util');
 
 const { ObjectId } = require('mongodb');
 
-module.exports = class DataSlotCollection {
+module.exports = class SbOptimisticEntityCollection {
     constructor(collection, {
-        buildMetadata = () => ({}),
         log = console.log.bind(console),
         nower = Date.now,
         ...otherOpts
     } = {}) {
-        this.buildMetadata = buildMetadata;
         this.collection = collection;
         this.log = log;
         this.nower = nower;
@@ -24,18 +22,15 @@ module.exports = class DataSlotCollection {
         const record = await this.collection.findOne(q);
 
         if (!record) {
-            throw error('NO_SUCH_CARTRIDGE',
-                    'No cartridge for query ' + util.inspect(q));
+            throw error('NO_SUCH_ENTITY',
+                    'No entity matching query ' + util.inspect(q));
         }
 
         const value = extractKeysWithPrefix(record, 'v_');
         value._id = record._id;
 
-        const metadata = extractKeysWithPrefix(record, 'm_');
-
         return {
             createdAt: record.createdAt,
-            metadata,
             updatedAt: record.updatedAt,
             value,
             version: record.version
@@ -49,16 +44,14 @@ module.exports = class DataSlotCollection {
             initialValue._id = new ObjectId();
         }
 
-        const metadata = doMetadata.call(this, initialValue);
         const now = new Date(this.nower());
         const version = bs58.encode(crypto.randomBytes(8));
 
         await this.collection.insertOne(
-                toMongoDoc(initialValue, metadata, version, now, now));
+                toMongoDoc(initialValue, version, now, now));
 
         return {
             createdAt: now,
-            metadata,
             updatedAt: now,
             value: initialValue,
             version
@@ -78,7 +71,6 @@ module.exports = class DataSlotCollection {
                 validateAndNormalizeExpectedVersions(expectedVersions);
 
         let curRecord;
-        let newMetadata;
         let newValue;
         let newVersion;
         let now;
@@ -86,7 +78,7 @@ module.exports = class DataSlotCollection {
         let tries = 0;
 
         do {
-            let oldMetadata, oldValue;
+            let oldValue;
             curRecord = await this.findOne(q);
 
             if (expectedVersions !== undefined
@@ -108,7 +100,6 @@ module.exports = class DataSlotCollection {
 
                 assertValidValue(newValue, 'Result of update function');
 
-                newMetadata = doMetadata.call(this, newValue);
                 now = new Date(this.nower());
 
                 try {
@@ -118,8 +109,7 @@ module.exports = class DataSlotCollection {
                                         _id: curRecord.value._id,
                                         version: curRecord.version
                                     },
-                                    toMongoDoc(newValue, newMetadata,
-                                            newVersion,
+                                    toMongoDoc(newValue, newVersion,
                                             curRecord.createdAt,
                                             now),
                                     { upsert: true });
@@ -150,7 +140,6 @@ module.exports = class DataSlotCollection {
 
         return {
             createdAt: curRecord.createdAt,
-            metadata: newMetadata,
             updatedAt: now,
             value: newValue,
             version: newVersion
@@ -163,17 +152,6 @@ function assertValidValue(v, desc) {
         throw error('INVALID_VALUE', `${v} must be a non-array, non-null `
                 + `object. Was: ` + util.inspect(v));
     }
-}
-
-function doMetadata(value) {
-    const metadata = this.buildMetadata(value);
-
-    if (metadata && (typeof metadata !== 'object' || Array.isArray(metadata))) {
-        throw error('INVALID_METADATA_VALUE', 'buildMetadata must return a '
-                + 'non-array object. Returned: ' + util.inspect(metadata));
-    }
-
-    return metadata || {};
 }
 
 function error(code, msg, cause) {
@@ -195,7 +173,7 @@ function mapTopLevelKeys(o, map) {
     return Object.fromEntries(Object.entries(o).map(([k, v]) => [map(k), v]));
 }
 
-function toMongoDoc(value, metadata, version, createdAt, now) {
+function toMongoDoc(value, version, createdAt, now) {
     const valueWithoutId = { ...value };
     delete valueWithoutId._id;
 
@@ -204,7 +182,6 @@ function toMongoDoc(value, metadata, version, createdAt, now) {
         updatedAt: now,
         version,
 
-        ...mapTopLevelKeys(metadata, k => `m_${k}`),
         ...mapTopLevelKeys(valueWithoutId, k => `v_${k}`)
     };
 
