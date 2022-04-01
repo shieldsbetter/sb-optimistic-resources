@@ -2,8 +2,8 @@
 
 FROM node:16
 
-RUN apt -qqy update
-RUN apt -qqy install netcat
+RUN apt-get -qqy update
+RUN apt-get -qqy install netcat
 
 RUN npm install -g ava c8
 

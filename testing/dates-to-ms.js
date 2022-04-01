@@ -1,6 +1,6 @@
 'use strict';
 
-const ObjectID = require('bson-objectid');
+const { ObjectId } = require('mongodb');
 
 module.exports = function datesToMs(o) {
     let result;
@@ -8,7 +8,10 @@ module.exports = function datesToMs(o) {
     if (o === null) {
         result = null;
     }
-    else if (o instanceof ObjectID) {
+    else if (o instanceof Date) {
+        result = o.valueOf();
+    }
+    else if (o instanceof ObjectId) {
         result = o;
     }
     else if (Array.isArray(o)) {
@@ -19,9 +22,7 @@ module.exports = function datesToMs(o) {
             ([key, value]) =>
                 [
                     key,
-                    value instanceof Date
-                            ? value.valueOf()
-                            : datesToMs(value)
+                    datesToMs(value)
                 ]));
     }
     else {

@@ -1,6 +1,7 @@
 'use strict';
 
 const fakeMongoDbClientBuilder = require('./fake-mongo-db-client');
+const MongoDbClientWrapper = require('./mongo-db-client-wrapper');
 
 const { MongoClient } = require('mongodb');
 
@@ -12,8 +13,8 @@ module.exports = fn => async t => {
         const mongoClient =
                 await MongoClient.connect(process.env.MONGO_CONNECT_STRING);
 
-        dbClient = mongoClient
-                .db(`${process.env.TEST_ID}-${subtestId}-db`);
+        dbClient = new MongoDbClientWrapper(
+                mongoClient.db(`${process.env.TEST_ID}-${subtestId}-db`));
     }
     else {
         dbClient = fakeMongoDbClientBuilder(t.log.bind(t));

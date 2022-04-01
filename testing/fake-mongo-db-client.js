@@ -1,12 +1,13 @@
 'use strict';
 
 const doClone = require('clone');
-const ObjectID = require('bson-objectid');
 const sift = require('sift');
+
+const { ObjectId } = require('mongodb');
 
 function clone(c) {
     // Let's just keep this easy...
-    if (c instanceof ObjectID) {
+    if (c instanceof ObjectId) {
         return c;
     }
 

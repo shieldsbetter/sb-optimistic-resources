@@ -2,8 +2,9 @@
 
 const bs58 = require('bs58');
 const crypto = require('crypto');
-const ObjectId = require("bson-objectid");
 const util = require('util');
+
+const { ObjectId } = require('mongodb');
 
 module.exports = class DataSlotCollection {
     constructor(collection, {
@@ -45,7 +46,7 @@ module.exports = class DataSlotCollection {
         assertValidValue(initialValue, 'initialValue');
 
         if (!('_id' in initialValue)) {
-            initialValue._id = ObjectId();
+            initialValue._id = new ObjectId();
         }
 
         const metadata = doMetadata.call(this, initialValue);
