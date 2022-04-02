@@ -29,7 +29,7 @@ async main() {
     });
 
     const { value } = await petsCollection.findOne({ _id: 'Ellie' });
-    assert.equal(value, {
+    assert.deepEqual(value, {
         _id: 'Ellie',
         breed: 'Azawakh',
         age: 7;
