@@ -526,3 +526,46 @@ test('weird key', hermeticTest(async (t, { dbClient }) => {
         version: updateResult.version
     });
 }));
+
+test('weird keyin array', hermeticTest(async (t, { dbClient }) => {
+    let now = 123;
+    const dsc = new DataSlotCollection(dbClient.collection('foo'), {
+        log: t.log.bind(t),
+        nower: () => now
+    });
+
+    const insertResult = dateToMs(await dsc.insertOne({
+        _id: 'foo',
+        bar: [{ '%$%.%bazz': 'bazzval' }]
+    }));
+
+    now = 124;
+    const updateResult = dateToMs(await dsc.updateOne({ _id: 'foo' }, v => ({
+        _id: v._id,
+        bar: [{ '%$%.%bazz': v.bar[0]['%$%.%bazz'] + 'also' }]
+    })));
+
+    t.deepEqual(updateResult, {
+        createdAt: 123,
+        updatedAt: 124,
+        value: {
+            _id: 'foo',
+            bar: [{ '%$%.%bazz': 'bazzvalalso' }]
+        },
+        version: updateResult.version
+    });
+
+    t.not(updateResult.version, insertResult.version);
+
+    const findResult = dateToMs(await dsc.findOne({ _id: 'foo' }));
+
+    t.deepEqual(findResult, {
+        createdAt: 123,
+        updatedAt: 124,
+        value: {
+            _id: 'foo',
+            bar: [{ '%$%.%bazz': 'bazzvalalso' }]
+        },
+        version: updateResult.version
+    });
+}));
