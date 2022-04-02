@@ -26,7 +26,7 @@ module.exports = class SbOptimisticEntityCollection {
                     'No entity matching query ' + util.inspect(q));
         }
 
-        const value = extractKeysWithPrefix(record, 'v_');
+        const value = decodeKeys(extractKeysWithPrefix(record, 'v_'));
         value._id = record._id;
 
         return {
@@ -48,7 +48,7 @@ module.exports = class SbOptimisticEntityCollection {
         const version = bs58.encode(crypto.randomBytes(8));
 
         await this.collection.insertOne(
-                toMongoDoc(initialValue, version, now, now));
+                toMongoDoc(encodeKeys(initialValue), version, now, now));
 
         return {
             createdAt: now,
@@ -89,7 +89,7 @@ module.exports = class SbOptimisticEntityCollection {
             }
 
             newVersion = bs58.encode(crypto.randomBytes(8));
-            newValue = await fn(curRecord.value, curRecord);
+            newValue = await fn(decodeKeys(curRecord.value), curRecord);
 
             if (newValue) {
                 if ('_id' in newValue && newValue._id !== curRecord.value._id) {
@@ -109,7 +109,7 @@ module.exports = class SbOptimisticEntityCollection {
                                         _id: curRecord.value._id,
                                         version: curRecord.version
                                     },
-                                    toMongoDoc(newValue, newVersion,
+                                    toMongoDoc(encodeKeys(newValue), newVersion,
                                             curRecord.createdAt,
                                             now),
                                     { upsert: true });
@@ -154,6 +154,16 @@ function assertValidValue(v, desc) {
     }
 }
 
+function decodeKeys(o) {
+    return mapKeys(o,
+            s => s.replace('%2E', '.').replace('%24', '$').replace('%25', '%'));
+}
+
+function encodeKeys(o) {
+    return mapKeys(o,
+            s => s.replace('%', '%25').replace('$', '%24').replace('.', '%2E'));
+}
+
 function error(code, msg, cause) {
     const e = new Error(msg);
     e.cause = cause;
@@ -167,6 +177,31 @@ function extractKeysWithPrefix(o, prefix) {
             Object.entries(o)
                     .filter(([k]) => k.startsWith(prefix))
                     .map(([k,v]) => [k.substring(prefix.length), v]));
+}
+
+function mapKeys(o, fn) {
+    let result;
+
+    if (typeof o === 'object') {
+        if (o === null || o instanceof ObjectId) {
+            result = o;
+        }
+        else if (Array.isArray(o)) {
+            result = o.map(el => mapKeys(el, fn));
+        }
+        else {
+            result = Object.fromEntries(Object.entries(o).map(
+                    ([key, val]) => [
+                        fn(key),
+                        mapKeys(val, fn)
+                    ]));
+        }
+    }
+    else {
+        result = o;
+    }
+
+    return result;
 }
 
 function mapTopLevelKeys(o, map) {

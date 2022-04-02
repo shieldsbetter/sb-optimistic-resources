@@ -412,3 +412,46 @@ test('weird error during update', hermeticTest(async (t, { dbClient }) => {
     t.is(error.code, 'UNEXPECTED_ERROR');
     t.is(error.cause.message, 'out of cheese');
 }));
+
+test('weird key', hermeticTest(async (t, { dbClient }) => {
+    let now = 123;
+    const dsc = new DataSlotCollection(dbClient.collection('foo'), {
+        log: t.log.bind(t),
+        nower: () => now
+    });
+
+    const insertResult = dateToMs(await dsc.insertOne({
+        _id: 'foo',
+        '$.bar': 'barval'
+    }));
+
+    now = 124;
+    const updateResult = dateToMs(await dsc.updateOne({ _id: 'foo' }, v => ({
+        _id: v._id,
+        '$.bar': v['$.bar'] + 'also'
+    })));
+
+    t.deepEqual(updateResult, {
+        createdAt: 123,
+        updatedAt: 124,
+        value: {
+            _id: 'foo',
+            '$.bar': 'barvalalso'
+        },
+        version: updateResult.version
+    });
+
+    t.not(updateResult.version, insertResult.version);
+
+    const fetchResult = dateToMs(await dsc.findOne({ _id: 'foo' }));
+
+    t.deepEqual(fetchResult, {
+        createdAt: 123,
+        updatedAt: 124,
+        value: {
+            _id: 'foo',
+            '$.bar': 'barvalalso'
+        },
+        version: updateResult.version
+    });
+}));
