@@ -6,7 +6,7 @@ const hermeticTest = require('../hermetic-test');
 const test = require('ava');
 const updateWithInterleaving = require('../update-with-interleaving');
 
-test('basic insert and fetch - with id',
+test('basic insert and findOne - with id',
         hermeticTest(async (t, { dbClient }) => {
     const dsc = new DataSlotCollection(dbClient.collection('foo'), {
         log: t.log.bind(t),
@@ -28,9 +28,9 @@ test('basic insert and fetch - with id',
         version: insertResult.version
     });
 
-    const fetchResult = dateToMs(await dsc.findOne({ _id: 'foo' }));
+    const findResult = dateToMs(await dsc.findOne({ _id: 'foo' }));
 
-    t.deepEqual(fetchResult, {
+    t.deepEqual(findResult, {
         createdAt: 123,
         updatedAt: 123,
         value: {
@@ -41,7 +41,8 @@ test('basic insert and fetch - with id',
     });
 }));
 
-test('basic insert and fetch - no id', hermeticTest(async (t, { dbClient }) => {
+test('basic insert and findOne - no id',
+        hermeticTest(async (t, { dbClient }) => {
     const dsc = new DataSlotCollection(dbClient.collection('foo'), {
         log: t.log.bind(t),
         nower: () => 123
@@ -61,10 +62,10 @@ test('basic insert and fetch - no id', hermeticTest(async (t, { dbClient }) => {
         version: insertResult.version
     });
 
-    const fetchResult = dateToMs(
+    const findResult = dateToMs(
             await dsc.findOne({ _id: insertResult.value._id }));
 
-    t.deepEqual(fetchResult, {
+    t.deepEqual(findResult, {
         createdAt: 123,
         updatedAt: 123,
         value: {
@@ -75,7 +76,7 @@ test('basic insert and fetch - no id', hermeticTest(async (t, { dbClient }) => {
     });
 }));
 
-test('basic insert, update, and fetch',
+test('basic insert, update, and findOne',
         hermeticTest(async (t, { dbClient }) => {
 
     let now = 123;
@@ -110,9 +111,9 @@ test('basic insert, update, and fetch',
 
     t.not(updateResult.version, insertResult.version);
 
-    const fetchResult = dateToMs(await dsc.findOne({ _id: 'foo' }));
+    const findResult = dateToMs(await dsc.findOne({ _id: 'foo' }));
 
-    t.deepEqual(fetchResult, {
+    t.deepEqual(findResult, {
         createdAt: 123,
         updatedAt: 124,
         value: {
@@ -122,6 +123,76 @@ test('basic insert, update, and fetch',
         },
         version: updateResult.version
     });
+}));
+
+test('find by something other than _id',
+        hermeticTest(async (t, { dbClient }) => {
+    const dsc = new DataSlotCollection(dbClient.collection('foo'), {
+        log: t.log.bind(t),
+        nower: () => 123
+    });
+
+    const insertResult = dateToMs(await dsc.insertOne({
+        _id: 'foo',
+        bar: 'barval'
+    }));
+
+    const findResult = dateToMs(await dsc.findOne({ bar: { $exists: true } }));
+
+    t.deepEqual(findResult, {
+        createdAt: 123,
+        updatedAt: 123,
+        value: {
+            _id: 'foo',
+            bar: 'barval'
+        },
+        version: insertResult.version
+    });
+}));
+
+test('find many', hermeticTest(async (t, { dbClient }) => {
+    const dsc = new DataSlotCollection(dbClient.collection('foo'), {
+        log: t.log.bind(t),
+        nower: () => 123
+    });
+
+    const insertResult1 = dateToMs(await dsc.insertOne({
+        _id: 'foo',
+        toBeReturned: true
+    }));
+
+    const insertResult2 = dateToMs(await dsc.insertOne({
+        _id: 'bar'
+    }));
+
+    const insertResult3 = dateToMs(await dsc.insertOne({
+        _id: 'bazz',
+        toBeReturned: true
+    }));
+
+    const findCursor = dsc.find({ toBeReturned: true });
+    const findDocs = (await findCursor.toArray()).map(dateToMs);
+
+    t.deepEqual(findDocs, [
+        {
+            createdAt: 123,
+            updatedAt: 123,
+            value: {
+                _id: 'foo',
+                toBeReturned: true
+            },
+            version: insertResult1.version
+        },
+        {
+            createdAt: 123,
+            updatedAt: 123,
+            value: {
+                _id: 'bazz',
+                toBeReturned: true
+            },
+            version: insertResult3.version
+        }
+    ]);
 }));
 
 test('assert wrong version', hermeticTest(async (t, { dbClient }) => {
@@ -215,10 +286,10 @@ test('interleaved updated', hermeticTest(async (t, { dbClient }) => {
         }, { log: t.log.bind(t) }
     );
 
-    const fetchValue = await dcc.findOne({ _id: 'bar' });
+    const findValue = await dcc.findOne({ _id: 'bar' });
 
     // Update #2 happened first, and then update #1 retried...
-    t.is(fetchValue.value.bazz, 'bazzval1');
+    t.is(findValue.value.bazz, 'bazzval1');
 }));
 
 test('no update', hermeticTest(async (t, { dbClient }) => {
@@ -234,16 +305,16 @@ test('no update', hermeticTest(async (t, { dbClient }) => {
 
     await dcc.updateOne({ _id: 'foo' }, () => {})
 
-    const fetchResult = dateToMs(await dcc.findOne({ _id: 'foo' }));
+    const findResult = dateToMs(await dcc.findOne({ _id: 'foo' }));
 
-    t.deepEqual(fetchResult, {
+    t.deepEqual(findResult, {
         createdAt: 123,
         updatedAt: 123,
         value: {
             _id: 'foo',
             bar: 'barval'
         },
-        version: fetchResult.version
+        version: findResult.version
     });
 }));
 
@@ -380,7 +451,7 @@ test('bad version string', hermeticTest(async (t, { dbClient }) => {
     t.is(e.code, 'INVALID_VERSION');
 }));
 
-test('fetch missing', hermeticTest(async (t, { dbClient }) => {
+test('findOne missing', hermeticTest(async (t, { dbClient }) => {
     const dsc = new DataSlotCollection(dbClient.collection('foo'), {
         log: t.log.bind(t)
     });
@@ -422,13 +493,13 @@ test('weird key', hermeticTest(async (t, { dbClient }) => {
 
     const insertResult = dateToMs(await dsc.insertOne({
         _id: 'foo',
-        '$.bar': 'barval'
+        '%$%.%bar': 'barval'
     }));
 
     now = 124;
     const updateResult = dateToMs(await dsc.updateOne({ _id: 'foo' }, v => ({
         _id: v._id,
-        '$.bar': v['$.bar'] + 'also'
+        '%$%.%bar': v['%$%.%bar'] + 'also'
     })));
 
     t.deepEqual(updateResult, {
@@ -436,21 +507,21 @@ test('weird key', hermeticTest(async (t, { dbClient }) => {
         updatedAt: 124,
         value: {
             _id: 'foo',
-            '$.bar': 'barvalalso'
+            '%$%.%bar': 'barvalalso'
         },
         version: updateResult.version
     });
 
     t.not(updateResult.version, insertResult.version);
 
-    const fetchResult = dateToMs(await dsc.findOne({ _id: 'foo' }));
+    const findResult = dateToMs(await dsc.findOne({ _id: 'foo' }));
 
-    t.deepEqual(fetchResult, {
+    t.deepEqual(findResult, {
         createdAt: 123,
         updatedAt: 124,
         value: {
             _id: 'foo',
-            '$.bar': 'barvalalso'
+            '%$%.%bar': 'barvalalso'
         },
         version: updateResult.version
     });

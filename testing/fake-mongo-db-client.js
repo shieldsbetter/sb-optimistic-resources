@@ -32,6 +32,12 @@ module.exports = (log) => {
 
 function fakeMongoCollectionClient(docs, log) {
     return {
+        find(q) {
+            const matches = docs.filter(sift(q));
+
+            return fakeFindCursor(matches);
+        },
+
         async findOne(q) {
             const matches = docs.filter(sift(q));
 
@@ -83,6 +89,28 @@ function fakeMongoCollectionClient(docs, log) {
                 matchedCount: matches.length,
                 upsertedCount
             };
+        }
+    };
+}
+
+function fakeFindCursor(docs) {
+    return {
+        map(fn) {
+            if (!this.mappers) {
+                this.mappers = [];
+            }
+
+            this.mappers.push(fn);
+
+            return this;
+        },
+
+        async toArray() {
+            let result = docs;
+            for (const m of this.mappers || []) {
+                result = result.map(m);
+            }
+            return result;
         }
     };
 }

@@ -5,6 +5,10 @@ class CollectionWrapper {
         this.base = base;
     }
 
+    find(q) {
+        return this.base.find(q);
+    }
+
     async findOne(q) {
         return await this.base.findOne(q);
     }

@@ -18,23 +18,20 @@ module.exports = class SbOptimisticEntityCollection {
         this.setTimeout = otherOpts.setTimeout || setTimeout;
     }
 
-    async findOne(q) {
-        const record = await this.collection.findOne(q);
+    find(q) {
+        return this.collection.find(this.translateQuery(q))
+                .map(mongoDocToEntityRecord);
+    }
 
-        if (!record) {
+    async findOne(q) {
+        const entityDoc = await this.collection.findOne(this.translateQuery(q));
+
+        if (!entityDoc) {
             throw error('NO_SUCH_ENTITY',
                     'No entity matching query ' + util.inspect(q));
         }
 
-        const value = decodeKeys(extractKeysWithPrefix(record, 'v_'));
-        value._id = record._id;
-
-        return {
-            createdAt: record.createdAt,
-            updatedAt: record.updatedAt,
-            value,
-            version: record.version
-        };
+        return mongoDocToEntityRecord(entityDoc);
     }
 
     async insertOne(initialValue) {
@@ -56,6 +53,28 @@ module.exports = class SbOptimisticEntityCollection {
             value: initialValue,
             version
         };
+    }
+
+    translateQuery(q) {
+        return mapKeys(q, (k, p) => {
+            let result;
+
+            if (k === '_id' || k.startsWith('$')) {
+                result = k;
+            }
+            else {
+                result = k
+                        .replace('%', '%25')
+                        .replace('$', '%24')
+                        .replace('.', '%2E');
+
+                if (p.length === 0) {
+                    result = 'v_' + result;
+                }
+            }
+
+            return result;
+        });
     }
 
     async updateOne(q, fn, expectedVersions, { shouldRetry } = {}) {
@@ -179,7 +198,7 @@ function extractKeysWithPrefix(o, prefix) {
                     .map(([k,v]) => [k.substring(prefix.length), v]));
 }
 
-function mapKeys(o, fn) {
+function mapKeys(o, fn, path = []) {
     let result;
 
     if (typeof o === 'object') {
@@ -187,14 +206,22 @@ function mapKeys(o, fn) {
             result = o;
         }
         else if (Array.isArray(o)) {
-            result = o.map(el => mapKeys(el, fn));
+            result = o.map((el, i) => {
+                path.push(i);
+                const result = mapKeys(el, fn);
+                path.pop();
+                return result;
+            });
         }
         else {
             result = Object.fromEntries(Object.entries(o).map(
-                    ([key, val]) => [
-                        fn(key),
-                        mapKeys(val, fn)
-                    ]));
+                    ([key, val]) => {
+                        const newKey = fn(key, path);
+                        path.push(key);
+                        const newVal = mapKeys(val, fn, path);
+                        path.pop();
+                        return [newKey, newVal];
+                    }));
         }
     }
     else {
@@ -206,6 +233,18 @@ function mapKeys(o, fn) {
 
 function mapTopLevelKeys(o, map) {
     return Object.fromEntries(Object.entries(o).map(([k, v]) => [map(k), v]));
+}
+
+function mongoDocToEntityRecord(d) {
+    const value = decodeKeys(extractKeysWithPrefix(d, 'v_'));
+    value._id = d._id;
+
+    return {
+        createdAt: d.createdAt,
+        updatedAt: d.updatedAt,
+        value,
+        version: d.version
+    };
 }
 
 function toMongoDoc(value, version, createdAt, now) {
