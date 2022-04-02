@@ -1,7 +1,7 @@
 {
   "name": "@shieldsbetter/sb-optimistic-entities",
   "version": "0.0.1",
-  "description": "",
+  "description": "Optimistic locking library for MongoDb.",
   "main": "index.js",
   "scripts": {
     "test": "c8 -r html ava"
@@ -11,6 +11,7 @@
   "devDependencies": {
     "ava": "^4.0.1",
     "c8": "^7.11.0",
+    "clone": "^2.1.2",
     "mongodb": "^4.4.1",
     "sift": "^16.0.0"
   },
@@ -20,7 +21,6 @@
     ]
   },
   "dependencies": {
-    "bs58": "^5.0.0",
-    "clone": "^2.1.2"
+    "bs58": "^5.0.0"
   }
 }
