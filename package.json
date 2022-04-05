@@ -1,6 +1,6 @@
 {
   "name": "@shieldsbetter/sb-optimistic-entities",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "description": "Optimistic locking library for MongoDb.",
   "main": "index.js",
   "scripts": {
@@ -8,6 +8,13 @@
   },
   "author": "Hampton Smith",
   "license": "ISC",
+  "repository": {
+      "type": "git",
+      "url": "https://github.com/hamptonsmith/sb-optimistic-entities"
+  },
+  "bugs": {
+      "url": "https://github.com/hamptonsmith/sb-optimistic-entities/issues"
+  },
   "devDependencies": {
     "ava": "^4.0.1",
     "c8": "^7.11.0",
