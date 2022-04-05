@@ -28,8 +28,8 @@ async main() {
         return ellie;
     });
 
-    const { value } = await petsCollection.findOne({ _id: 'Ellie' });
-    assert.deepEqual(value, {
+    const entity = await petsCollection.findOne({ _id: 'Ellie' });
+    assert.deepEqual(entity, {
         _id: 'Ellie',
         breed: 'Azawakh',
         age: 7;

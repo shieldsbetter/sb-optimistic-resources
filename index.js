@@ -19,22 +19,40 @@ module.exports = class SbOptimisticEntityCollection {
     }
 
     find(q) {
+        return this.findRecords(q).map(({ value }) => value);
+    }
+
+    findRecords(q) {
         return this.collection.find(this.translateQuery(q))
                 .map(mongoDocToEntityRecord);
     }
 
     async findOne(q) {
+        return (await this.findOneRecord(q)).value;
+    }
+
+    async findOneRecord(q) {
         const entityDoc = await this.collection.findOne(this.translateQuery(q));
 
-        if (!entityDoc) {
-            throw error('NO_SUCH_ENTITY',
-                    'No entity matching query ' + util.inspect(q));
+        let result;
+        if (entityDoc) {
+            result = mongoDocToEntityRecord(entityDoc);
+        }
+        else {
+            // I'd usually prefer throw an exception in this case, but this is a
+            // little more "Mongo-like".
+            result = {};
         }
 
-        return mongoDocToEntityRecord(entityDoc);
+        return result;
     }
 
     async insertOne(initialValue) {
+        return (await this.insertOneRecord(initialValue))
+                .collectionOperationResult;
+    }
+
+    async insertOneRecord(initialValue) {
         assertValidValue(initialValue, 'initialValue');
 
         if (!('_id' in initialValue)) {
@@ -44,10 +62,11 @@ module.exports = class SbOptimisticEntityCollection {
         const now = new Date(this.nower());
         const version = bs58.encode(crypto.randomBytes(8));
 
-        await this.collection.insertOne(
+        const collectionOperationResult = await this.collection.insertOne(
                 toMongoDoc(encodeKeys(initialValue), version, now, now));
 
         return {
+            collectionOperationResult,
             createdAt: now,
             updatedAt: now,
             value: initialValue,
@@ -77,7 +96,12 @@ module.exports = class SbOptimisticEntityCollection {
         });
     }
 
-    async updateOne(q, fn, expectedVersions, { shouldRetry } = {}) {
+    async updateOne(q, fn, opts) {
+        return (await this.updateOneRecord(q, fn, opts))
+                .collectionOperationResult;
+    }
+
+    async updateOneRecord(q, fn, { expectedVersions, shouldRetry } = {}) {
         if (!shouldRetry || shouldRetry === true) {
             shouldRetry = async tries => {
                 await new Promise(resolve => this.setTimeout(resolve, 200));
@@ -89,6 +113,7 @@ module.exports = class SbOptimisticEntityCollection {
         expectedVersions =
                 validateAndNormalizeExpectedVersions(expectedVersions);
 
+        let collectionOperationResult;
         let curRecord;
         let newValue;
         let newVersion;
@@ -98,7 +123,7 @@ module.exports = class SbOptimisticEntityCollection {
 
         do {
             let oldValue;
-            curRecord = await this.findOne(q);
+            curRecord = await this.findOneRecord(q);
 
             if (expectedVersions !== undefined
                     && !expectedVersions.includes(curRecord.version)) {
@@ -122,7 +147,7 @@ module.exports = class SbOptimisticEntityCollection {
                 now = new Date(this.nower());
 
                 try {
-                    const { matchedCount, upsertedCount } =
+                    collectionOperationResult =
                             await this.collection.replaceOne(
                                     {
                                         _id: curRecord.value._id,
@@ -133,7 +158,8 @@ module.exports = class SbOptimisticEntityCollection {
                                             now),
                                     { upsert: true });
 
-                    success = (matchedCount + upsertedCount) > 0;
+                    success = (collectionOperationResult.matchedCount
+                            + collectionOperationResult.upsertedCount) > 0;
                 }
                 catch (e) {
                     if (e.code !== 11000) {
@@ -158,6 +184,7 @@ module.exports = class SbOptimisticEntityCollection {
         }
 
         return {
+            collectionOperationResult,
             createdAt: curRecord.createdAt,
             updatedAt: now,
             value: newValue,

@@ -53,7 +53,7 @@ module.exports = async (dcc, q, update1, otherUpdates,
         }
 
         return newValue;
-    }, undefined, updateOpts);
+    }, updateOpts);
 
     let error;
     let i = 0;

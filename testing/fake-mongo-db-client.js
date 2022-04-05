@@ -53,6 +53,8 @@ function fakeMongoCollectionClient(docs, log) {
             }
 
             docs.push(clone(d));
+
+            return {};
         },
 
         async replaceOne(q, d, opts = {}) {

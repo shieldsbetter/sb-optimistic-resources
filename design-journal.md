@@ -1,5 +1,43 @@
 # Design Journal
 
+## Return values
+
+### The problem
+
+So as I've married this more directly to MongoDb, I don't love that methods
+named like MongoDb methods (e..g, `findOne()`) don't return things shaped like
+what the equivalent MongoDb method returns. I.e., this library returns a
+metadata record containing a `value` field rather than the entity value itself,
+and if no such record exists, throws an exception rather than returning `null`.
+
+That said, due to the nature of what we're doing, we're able to provide a much
+more consistent interface--everything just returns the full record--which is
+really nice and I hate to make _worse_ in order to make it consistent.
+
+That said we can certainly imagine that in the future that will become more
+complicated--factoring in projection, for example, after which we won't be able
+to return the full document.
+
+### Option 1: Just be different
+
+I do like the current shape of things.
+
+### Option 2: Offer both
+
+Arguably there's no real downside to this one, other than we need to expose some
+internals by returning what the underlying collection returns (i.e., our
+`updateOne()` probably needs to return the result of the successful internal
+`updateOne()`.)
+
+Then we can have a separate `updateOneRecord()` that does the same thing but
+returns the "better" return type.
+
+### My verdict
+
+I'll just offer both. I don't love it but there's no real downside and there's
+certainly an upside to consistency. I'm building this on Mongo, so there's no
+point in apologizing for Mongo.
+
 ## Rethinking vocabulary
 
 ### The problem
