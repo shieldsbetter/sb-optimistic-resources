@@ -355,8 +355,6 @@ test('interleaved updated', hermeticTest(async (t, { dbClient }) => {
     await updateWithInterleaving(dcc, { _id: 'bar' },
         // This update will be preempted...
         async v => {
-            console.log('u1', v);
-
             // This will run twice, once before and once after the interleaving
             // update, so we can't assert a specific value of v.bazz
 
@@ -367,8 +365,6 @@ test('interleaved updated', hermeticTest(async (t, { dbClient }) => {
 
         // ...by this update.
         async v => {
-            console.log('u2', v);
-
             t.is(v.bazz, 'bazzval0');
 
             v.bazz = 'bazzval2';

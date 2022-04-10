@@ -14,6 +14,10 @@ class CollectionWrapper {
     }
 
     async insertOne(d) {
+        if (this.insertOneError) {
+            throw this.insertOneError;
+        }
+
         return await this.base.insertOne(d);
     }
 

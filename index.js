@@ -127,7 +127,6 @@ module.exports = class SbOptimisticEntityCollection {
         do {
             let oldValue;
             curRecord = await this.findOneRecord(q);
-            console.log('curRecord', curRecord);
 
             if (expectedVersions !== undefined
                     && !expectedVersions.includes(curRecord.version)) {
@@ -195,8 +194,6 @@ module.exports = class SbOptimisticEntityCollection {
                 };
             }
 
-            console.log('newValue', newValue);
-
             if (newValue) {
                 assertValidValue(newValue, 'Result of update function');
 
@@ -228,7 +225,6 @@ module.exports = class SbOptimisticEntityCollection {
                     + util.inspect(q));
         }
 
-        console.log('newValue2', newValue);
         return {
             collectionOperationResult,
             createdAt: curRecord.createdAt || now,
