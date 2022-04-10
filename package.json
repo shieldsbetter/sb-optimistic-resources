@@ -9,16 +9,15 @@
   "author": "Hampton Smith",
   "license": "ISC",
   "repository": {
-      "type": "git",
-      "url": "https://github.com/hamptonsmith/sb-optimistic-entities"
+    "type": "git",
+    "url": "https://github.com/hamptonsmith/sb-optimistic-entities"
   },
   "bugs": {
-      "url": "https://github.com/hamptonsmith/sb-optimistic-entities/issues"
+    "url": "https://github.com/hamptonsmith/sb-optimistic-entities/issues"
   },
   "devDependencies": {
     "ava": "^4.0.1",
     "c8": "^7.11.0",
-    "clone": "^2.1.2",
     "mongodb": "^4.4.1",
     "sift": "^16.0.0"
   },
@@ -28,6 +27,9 @@
     ]
   },
   "dependencies": {
-    "bs58": "^5.0.0"
+    "bs58": "^5.0.0",
+    "clone": "^2.1.2",
+    "deep-equal": "^2.0.5",
+    "lodash": "^4.17.21"
   }
 }

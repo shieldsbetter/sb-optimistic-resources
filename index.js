@@ -1,7 +1,10 @@
 'use strict';
 
 const bs58 = require('bs58');
+const clone = require('clone');
 const crypto = require('crypto');
+const deepEqual = require('deep-equal');
+const lodash = require('lodash');
 const util = require('util');
 
 const { ObjectId } = require('mongodb');
@@ -41,7 +44,7 @@ module.exports = class SbOptimisticEntityCollection {
         else {
             // I'd usually prefer throw an exception in this case, but this is a
             // little more "Mongo-like".
-            result = {};
+            result = { value: null };
         }
 
         return result;
@@ -101,12 +104,13 @@ module.exports = class SbOptimisticEntityCollection {
                 .collectionOperationResult;
     }
 
-    async updateOneRecord(q, fn, { expectedVersions, shouldRetry } = {}) {
+    async updateOneRecord(
+            q, fn, { expectedVersions, shouldRetry, upsert } = {}) {
         if (!shouldRetry || shouldRetry === true) {
             shouldRetry = async tries => {
                 await new Promise(resolve => this.setTimeout(resolve, 200));
 
-                return tries < 3
+                return tries < 3;
             };
         }
 
@@ -118,12 +122,12 @@ module.exports = class SbOptimisticEntityCollection {
         let newValue;
         let newVersion;
         let now;
-        let success;
         let tries = 0;
 
         do {
             let oldValue;
             curRecord = await this.findOneRecord(q);
+            console.log('curRecord', curRecord);
 
             if (expectedVersions !== undefined
                     && !expectedVersions.includes(curRecord.version)) {
@@ -132,63 +136,105 @@ module.exports = class SbOptimisticEntityCollection {
                         + `${JSON.stringify(expectedVersions)}`);
             }
 
-            newVersion = bs58.encode(crypto.randomBytes(8));
-            newValue = await fn(decodeKeys(curRecord.value), curRecord);
+            let op;
+            if (curRecord.value === null) {
+                if (upsert) {
+                    newValue = await fn(
+                            generateDefaultDocForUpsert(q), curRecord);
 
-            if (newValue) {
-                if ('_id' in newValue && newValue._id !== curRecord.value._id) {
-                    throw error('INVALID_UPDATE',
-                            `Cannot modify _id. ${newValue._id} =/=> `
-                            + `${curRecord.value._id}`);
-                }
-
-                assertValidValue(newValue, 'Result of update function');
-
-                now = new Date(this.nower());
-
-                try {
-                    collectionOperationResult =
-                            await this.collection.replaceOne(
-                                    {
-                                        _id: curRecord.value._id,
-                                        version: curRecord.version
-                                    },
-                                    toMongoDoc(encodeKeys(newValue), newVersion,
-                                            curRecord.createdAt,
-                                            now),
-                                    { upsert: true });
-
-                    success = (collectionOperationResult.matchedCount
-                            + collectionOperationResult.upsertedCount) > 0;
-                }
-                catch (e) {
-                    if (e.code !== 11000) {
-                        throw error('UNEXPECTED_ERROR', 'Unexpected error.', e);
+                    if (!('_id' in newValue)) {
+                        newValue._id = new ObjectId();
                     }
 
-                    // MongoServerError 11000. The _id is already present with
-                    // a different version number.
+                    op = async doc => {
+                        let result;
+
+                        try {
+                            result = await this.collection.insertOne(doc);
+                        }
+                        catch (e) {
+                            if (e.code !== 11000) {
+                                throw error('UNEXPECTED_ERROR',
+                                        'Unexpected error.', e);
+                            }
+
+                            // Somebody else inserted in the meantime. We should
+                            // maybe try again...
+                        }
+
+                        return result;
+                    };
                 }
+            }
+            else {
+                const oldId = clone(curRecord.value._id);
+                newValue = await fn(decodeKeys(curRecord.value), curRecord);
+
+                if (newValue && !deepEqual(newValue._id, oldId)) {
+                    const oldIdStr = util.inspect(oldId);
+                    const newIdStr = util.inspect(newValue._id);
+                    throw error('INVALID_UPDATE',
+                            `Cannot modify _id. ${newIdStr} != ${oldIdStr}`);
+                }
+
+                op = async doc => {
+                    let result;
+
+                    result = await this.collection.replaceOne({
+                        _id: curRecord.value._id,
+                        version: curRecord.version
+                    }, doc);
+
+                    if (result.matchedCount === 0) {
+                        // Someone has updated or deleted out from under us. We
+                        // should maybe try again...
+                        result = undefined;
+                    }
+
+                    return result;
+                };
+            }
+
+            console.log('newValue', newValue);
+
+            if (newValue) {
+                assertValidValue(newValue, 'Result of update function');
+
+                newVersion = bs58.encode(crypto.randomBytes(8));
+                now = new Date(this.nower());
+
+                collectionOperationResult = await op(toMongoDoc(
+                        encodeKeys(newValue),
+                        newVersion,
+                        curRecord.createdAt || now,
+                        now));
 
                 tries++;
             }
             else {
-                success = true;
+                collectionOperationResult = {
+                    acknowledged: true,
+                    modifiedCount: 0,
+                    upsertedId: null,
+                    upsertedCount: 0,
+                    matchedCount: 0
+                };
             }
-        } while (!success && await shouldRetry(tries));
+        } while (!collectionOperationResult && await shouldRetry(tries));
 
-        if (!success) {
+        if (!collectionOperationResult) {
             throw error('EXHAUSTED_RETRIES',
                     'Ran out of retries attempting to update by query '
                     + util.inspect(q));
         }
 
+        console.log('newValue2', newValue);
         return {
             collectionOperationResult,
-            createdAt: curRecord.createdAt,
-            updatedAt: now,
-            value: newValue,
-            version: newVersion
+            createdAt: curRecord.createdAt || now,
+            updatedAt: now || curRecord.updatedAt,
+            value: newValue ? newValue : undefined, // Regularize falsy to undef
+            version: newValue ? newVersion : curRecord.version
         };
     }
 }
@@ -223,6 +269,28 @@ function extractKeysWithPrefix(o, prefix) {
             Object.entries(o)
                     .filter(([k]) => k.startsWith(prefix))
                     .map(([k,v]) => [k.substring(prefix.length), v]));
+}
+
+function generateDefaultDocForUpsert(query) {
+    const result = {};
+
+    for (let [key, value] of Object.entries(query)) {
+        if (value && typeof value === 'object') {
+            const ops = Object.keys(value).filter(k => k.startsWith('$'));
+
+            if (ops.includes('$eq')) {
+                value = value.$eq;
+            }
+            else if (ops.length > 0) {
+                continue;
+            }
+        }
+
+        // Either null, or not an object, or had an $eq
+        lodash.set(result, key, value);
+    }
+
+    return result;
 }
 
 function mapKeys(o, fn, path = []) {

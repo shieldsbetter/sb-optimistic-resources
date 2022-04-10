@@ -45,6 +45,10 @@ function fakeMongoCollectionClient(docs, log) {
         },
 
         async insertOne(d) {
+            if (this.insertOneError) {
+                throw this.insertOneError;
+            }
+
             if (!d._id) {
                 d = {
                     _id: `${Math.random()}`,
@@ -64,6 +68,8 @@ function fakeMongoCollectionClient(docs, log) {
 
             const index = docs.findIndex(sift(q));
             const matches = docs.filter(sift(q));
+
+            console.log('replaceOne', q, d, matches);
 
             let upsertedCount = 0;
             if (index === -1) {

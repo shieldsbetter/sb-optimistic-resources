@@ -38,6 +38,7 @@ module.exports = async (dcc, q, update1, otherUpdates,
 
         let newValue;
         try {
+            console.log('uu1');
             newValue = await update1(...args);
         }
         finally {
@@ -70,6 +71,7 @@ module.exports = async (dcc, q, update1, otherUpdates,
 
         try {
             await dcc.updateOne(q, async (...args) => {
+                console.log('uu2');
                 const result = await otherUpdate(...args);
                 return result;
             });

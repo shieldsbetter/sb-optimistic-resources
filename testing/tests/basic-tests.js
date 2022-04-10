@@ -355,6 +355,8 @@ test('interleaved updated', hermeticTest(async (t, { dbClient }) => {
     await updateWithInterleaving(dcc, { _id: 'bar' },
         // This update will be preempted...
         async v => {
+            console.log('u1', v);
+
             // This will run twice, once before and once after the interleaving
             // update, so we can't assert a specific value of v.bazz
 
@@ -365,6 +367,8 @@ test('interleaved updated', hermeticTest(async (t, { dbClient }) => {
 
         // ...by this update.
         async v => {
+            console.log('u2', v);
+
             t.is(v.bazz, 'bazzval0');
 
             v.bazz = 'bazzval2';
@@ -545,7 +549,7 @@ test('findOne missing', hermeticTest(async (t, { dbClient }) => {
 
     const findResult = await dsc.findOneRecord({ _id: 'foo' });
 
-    t.deepEqual(findResult, {});
+    t.deepEqual(findResult, { value: null });
 }));
 
 test('weird error during update', hermeticTest(async (t, { dbClient }) => {
@@ -568,9 +572,27 @@ test('weird error during update', hermeticTest(async (t, { dbClient }) => {
         plugh: 'plughval'
     })));
 
+    t.is(error.message, 'out of cheese');
+}));
+
+test('weird error during upsert', hermeticTest(async (t, { dbClient }) => {
+    const colClient = dbClient.collection('foo');
+    const dsc = new DataSlotCollection(colClient, {
+        log: t.log.bind(t)
+    });
+
+    colClient.insertOneError = new Error('out of cheese');
+    const error = await t.throwsAsync(
+            dsc.updateOneRecord({ _id: 'foo' }, v => ({
+        _id: v._id,
+        bar: v.bar,
+        plugh: 'plughval'
+    }), { upsert: true }));
+
     t.is(error.code, 'UNEXPECTED_ERROR');
     t.is(error.cause.message, 'out of cheese');
 }));
+
 
 test('weird key', hermeticTest(async (t, { dbClient }) => {
     let now = 123;
@@ -661,6 +683,172 @@ test('weird keyin array', hermeticTest(async (t, { dbClient }) => {
         value: {
             _id: 'foo',
             bar: [{ '%$%.%bazz': 'bazzvalalso' }]
+        },
+        version: updateResult.version
+    });
+}));
+
+test('update non-existent',
+        hermeticTest(async (t, { dbClient }) => {
+
+    let now = 123;
+    const dsc = new DataSlotCollection(dbClient.collection('foo'), {
+        log: t.log.bind(t),
+        nower: () => now
+    });
+
+    let ran = false;
+    const updateResult = await dsc.updateOneRecord({ _id: 'foo' }, v => {
+        ran = true;
+
+        return {
+            _id: v._id,
+            bar: v.bar,
+            plugh: 'plughval'
+        }
+    });
+
+    t.is(ran, false);
+
+    t.deepEqual(updateResult.collectionOperationResult.matchedCount, 0);
+    t.deepEqual(updateResult.collectionOperationResult.modifiedCount, 0);
+    delete updateResult.collectionOperationResult;
+
+    t.deepEqual(updateResult, {
+        createdAt: undefined,
+        updatedAt: undefined,
+        value: undefined,
+        version: undefined
+    });
+}));
+
+test('upsert non-existent',
+        hermeticTest(async (t, { dbClient }) => {
+
+    let now = 123;
+    const dsc = new DataSlotCollection(dbClient.collection('foo'), {
+        log: t.log.bind(t),
+        nower: () => now
+    });
+
+    let ran = false;
+    const updateResult = dateToMs(
+            await dsc.updateOneRecord({ foo: { $in: ['bar'] } }, v => {
+        ran = true;
+        t.deepEqual(v, {});
+
+        return {
+            _id: 'foo',
+            bar: 'bar',
+            plugh: 'plughval'
+        }
+    }, { upsert: true }));
+
+    t.is(ran, true);
+    t.truthy(updateResult.collectionOperationResult);
+    delete updateResult.collectionOperationResult;
+
+    t.deepEqual(updateResult, {
+        createdAt: 123,
+        updatedAt: 123,
+        value: {
+            _id: 'foo',
+            bar: 'bar',
+            plugh: 'plughval'
+        },
+        version: updateResult.version
+    });
+}));
+
+test('upsert non-existent (no id)',
+        hermeticTest(async (t, { dbClient }) => {
+
+    let now = 123;
+    const dsc = new DataSlotCollection(dbClient.collection('foo'), {
+        log: t.log.bind(t),
+        nower: () => now
+    });
+
+    let ran = false;
+    const updateResult = dateToMs(
+            await dsc.updateOneRecord({ foo: { $in: ['bar'] } }, v => {
+        ran = true;
+        t.deepEqual(v, {});
+
+        return {
+            bar: 'bar',
+            plugh: 'plughval'
+        }
+    }, { upsert: true }));
+
+    t.is(ran, true);
+    t.truthy(updateResult.collectionOperationResult);
+    delete updateResult.collectionOperationResult;
+
+    t.truthy(updateResult.value._id);
+
+    t.deepEqual(updateResult, {
+        createdAt: 123,
+        updatedAt: 123,
+        value: {
+            _id: updateResult.value._id,
+            bar: 'bar',
+            plugh: 'plughval'
+        },
+        version: updateResult.version
+    });
+}));
+
+test('upsert non-existent ($eq set provided)',
+        hermeticTest(async (t, { dbClient }) => {
+
+    let now = 123;
+    const dsc = new DataSlotCollection(dbClient.collection('foo'), {
+        log: t.log.bind(t),
+        nower: () => now
+    });
+
+    let ran = false;
+    const updateResult = dateToMs(
+            await dsc.updateOneRecord({
+                _id: 'foo',
+                bar: { $in: ['baz'] },
+                'waldo.plugh': { $eq: 'bazz' },
+                alice: {
+                    bob: 'charlie'
+                }
+            }, v => {
+                ran = true;
+                t.deepEqual(v, {
+                    _id: 'foo',
+                    waldo: {
+                        plugh: 'bazz'
+                    },
+                    alice: {
+                        bob: 'charlie'
+                    }
+                });
+
+                return {
+                    _id: 'foo',
+                    bar: 'bar',
+                    plugh: 'plughval'
+                }
+            }, { upsert: true }));
+
+    t.is(ran, true);
+    t.truthy(updateResult.collectionOperationResult);
+    delete updateResult.collectionOperationResult;
+
+    t.truthy(updateResult.value._id);
+
+    t.deepEqual(updateResult, {
+        createdAt: 123,
+        updatedAt: 123,
+        value: {
+            _id: updateResult.value._id,
+            bar: 'bar',
+            plugh: 'plughval'
         },
         version: updateResult.version
     });
