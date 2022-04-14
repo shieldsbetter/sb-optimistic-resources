@@ -32,6 +32,24 @@ module.exports = (log) => {
 
 function fakeMongoCollectionClient(docs, log) {
     return {
+        deleteMany(q) {
+            const predicate = sift(q);
+            while (docs.some(predicate)) {
+                docs.splice(docs.findIndex(predicate), 1);
+            }
+
+            return {};
+        },
+
+        deleteOne(q) {
+            const predicate = sift(q);
+            if (docs.some(predicate)) {
+                docs.splice(docs.findIndex(predicate), 1);
+            }
+
+            return {};
+        },
+
         find(q) {
             const matches = docs.filter(sift(q));
 
@@ -68,8 +86,6 @@ function fakeMongoCollectionClient(docs, log) {
 
             const index = docs.findIndex(sift(q));
             const matches = docs.filter(sift(q));
-
-            console.log('replaceOne', q, d, matches);
 
             let upsertedCount = 0;
             if (index === -1) {

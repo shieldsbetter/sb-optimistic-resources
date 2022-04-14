@@ -849,3 +849,50 @@ test('upsert non-existent ($eq set provided)',
         version: updateResult.version
     });
 }));
+
+test('basic insert and deleteOne', hermeticTest(async (t, { dbClient }) => {
+    const dsc = new DataSlotCollection(dbClient.collection('foo'), {
+        log: t.log.bind(t),
+        nower: () => 123
+    });
+
+    await dsc.insertOneRecord({
+        _id: 'foo',
+        bar: 'barval'
+    });
+
+    const deleteResult = await dsc.deleteOne({ _id: 'foo' });
+    t.truthy(deleteResult);
+
+    const findResult = await dsc.findOneRecord({ _id: 'foo' });
+
+    t.deepEqual(findResult, { value: null });
+}));
+
+test('basic insert and deleteMany', hermeticTest(async (t, { dbClient }) => {
+    const dsc = new DataSlotCollection(dbClient.collection('foo'), {
+        log: t.log.bind(t),
+        nower: () => 123
+    });
+
+    await dsc.insertOneRecord({
+        _id: 'foo',
+        deleteMe: true
+    });
+
+    await dsc.insertOneRecord({
+        _id: 'bar'
+    });
+
+    await dsc.insertOneRecord({
+        _id: 'bazz',
+        deleteMe: true
+    });
+
+    const deleteResult = await dsc.deleteMany({ deleteMe: true });
+    t.truthy(deleteResult);
+
+    const findResult = await (dsc.find({}).toArray());
+
+    t.deepEqual(findResult, [{ _id: 'bar' }]);
+}));

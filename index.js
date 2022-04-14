@@ -21,21 +21,30 @@ module.exports = class SbOptimisticEntityCollection {
         this.setTimeout = otherOpts.setTimeout || setTimeout;
     }
 
-    find(q) {
-        return this.findRecords(q).map(({ value }) => value);
+    deleteMany(q, opts = {}) {
+        return this.collection.deleteMany(this.translateQuery(q), opts);
     }
 
-    findRecords(q) {
-        return this.collection.find(this.translateQuery(q))
+    deleteOne(q, opts = {}) {
+        return this.collection.deleteOne(this.translateQuery(q), opts);
+    }
+
+    find(q, opts = {}) {
+        return this.findRecords(q, opts).map(({ value }) => value);
+    }
+
+    findRecords(q, opts = {}) {
+        return this.collection.find(this.translateQuery(q), {})
                 .map(mongoDocToEntityRecord);
     }
 
-    async findOne(q) {
-        return (await this.findOneRecord(q)).value;
+    async findOne(q, opts = {}) {
+        return (await this.findOneRecord(q, opts)).value;
     }
 
-    async findOneRecord(q) {
-        const entityDoc = await this.collection.findOne(this.translateQuery(q));
+    async findOneRecord(q, opts = {}) {
+        const entityDoc =
+                await this.collection.findOne(this.translateQuery(q), opts);
 
         let result;
         if (entityDoc) {
@@ -50,12 +59,12 @@ module.exports = class SbOptimisticEntityCollection {
         return result;
     }
 
-    async insertOne(initialValue) {
-        return (await this.insertOneRecord(initialValue))
+    async insertOne(initialValue, opts = {}) {
+        return (await this.insertOneRecord(initialValue, opts))
                 .collectionOperationResult;
     }
 
-    async insertOneRecord(initialValue) {
+    async insertOneRecord(initialValue, opts = {}) {
         assertValidValue(initialValue, 'initialValue');
 
         if (!('_id' in initialValue)) {
@@ -66,7 +75,7 @@ module.exports = class SbOptimisticEntityCollection {
         const version = bs58.encode(crypto.randomBytes(8));
 
         const collectionOperationResult = await this.collection.insertOne(
-                toMongoDoc(encodeKeys(initialValue), version, now, now));
+                toMongoDoc(encodeKeys(initialValue), version, now, now), opts);
 
         return {
             collectionOperationResult,

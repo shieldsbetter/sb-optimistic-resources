@@ -5,6 +5,14 @@ class CollectionWrapper {
         this.base = base;
     }
 
+    deleteMany(q) {
+        return this.base.deleteMany(q);
+    }
+
+    deleteOne(q) {
+        return this.base.deleteOne(q);
+    }
+
     find(q) {
         return this.base.find(q);
     }
