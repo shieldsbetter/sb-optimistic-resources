@@ -28,7 +28,7 @@ module.exports = class SbOptimisticEntityCollection {
 
     async deleteOneRecord(q, opts = {}) {
         return await mutateOneRecord.bind(this)(
-                q, deleteMutation.bind(this)(), opts)
+                q, deleteMutation.bind(this)(opts.confirmDelete), opts)
     }
 
     find(q, opts = {}) {
@@ -133,17 +133,28 @@ function decodeKeys(o) {
             s => s.replace('%2E', '.').replace('%24', '$').replace('%25', '%'));
 }
 
-function deleteMutation() {
+function deleteMutation(confirmDelete = (() => true)) {
     return async (curRecord, now, { upsert }) => {
-        const deleteResult = this.collection.deleteOne({
-            _id: curRecord.value._id,
-            version: curRecord.version
-        });
+        let collectionOperationResult;
+
+        const confirmed = await confirmDelete(curRecord.value, curRecord);
+        if (confirmed) {
+            collectionOperationResult = await this.collection.deleteOne({
+                _id: curRecord.value._id,
+                version: curRecord.version
+            });
+        }
+        else {
+            collectionOperationResult = {
+                acknowledged: true,
+                deletedCount: 0
+            };
+        }
 
         return {
-            collectionOperationResult: deleteResult,
-            newValue: undefined,
-            newVersion: undefined
+            collectionOperationResult,
+            newValue: confirmed ? undefined : curRecord.value,
+            newVersion: confirmed ? undefined : curRecord.version
         };
     };
 }

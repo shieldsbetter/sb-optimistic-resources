@@ -868,3 +868,52 @@ test('basic insert and deleteOne', hermeticTest(async (t, { dbClient }) => {
 
     t.deepEqual(findResult, { value: null });
 }));
+
+test('deleteOne - confirm true', hermeticTest(async (t, { dbClient }) => {
+    const dsc = new DataSlotCollection(dbClient.collection('foo'), {
+        log: t.log.bind(t),
+        nower: () => 123
+    });
+
+    await dsc.insertOneRecord({
+        _id: 'foo',
+        bar: 'barval'
+    });
+
+    const deleteResult = await dsc.deleteOne(
+            { _id: 'foo' }, { confirmDelete: (() => true) });
+    t.truthy(deleteResult);
+
+    const findResult = await dsc.findOneRecord({ _id: 'foo' });
+
+    t.deepEqual(findResult, { value: null });
+}));
+
+test('deleteOne - confirm false', hermeticTest(async (t, { dbClient }) => {
+    const dsc = new DataSlotCollection(dbClient.collection('foo'), {
+        log: t.log.bind(t),
+        nower: () => 123
+    });
+
+    const insertResult = await dsc.insertOneRecord({
+        _id: 'foo',
+        bar: 'barval'
+    });
+
+    const deleteResult = dateToMs(await dsc.deleteOneRecord(
+            { _id: 'foo' }, { confirmDelete: (() => false) }));
+
+    t.deepEqual(deleteResult, {
+        collectionOperationResult: {
+            acknowledged: true,
+            deletedCount: 0
+        },
+        createdAt: 123,
+        updatedAt: 123,
+        value: {
+            _id: 'foo',
+            bar: 'barval'
+        },
+        version: insertResult.version
+    });
+}));
