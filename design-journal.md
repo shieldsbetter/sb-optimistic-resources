@@ -1,11 +1,69 @@
 # Design Journal
 
+## Delete mechanism
+
+### The problem
+
+As I'm building out `@shieldsbetter/relaxation` on top of this library, I need
+to implement the `DELETE` verb, and for parity with the other mutation verbs,
+I need to implement the `If-Match` and `If-None-Match` headers. At time of
+writing, `deleteOne()` and `deleteMany()` in this library are implemented as
+direct calls to the underlying Mongo collection's `deleteOne()` and
+`deleteMany()`, which seems sensible. Under this regime, I might implement
+`If-Match` and `If-None-Match` by simply adding an `expectedVersions` option as
+`updateOne()` already has, and perhaps also an `unexpectedVersions` to allow for
+`If-None-Match` (at which point, I would add `unexpectedVersions` to
+`updateOne()` as well).
+
+However, this straightforward implementation has a couple of drawbacks:
+
+1) it will not be possible to distinguish "didn't delete because the `_id`
+didn't exist" from "didn't delete because an unexpected version was
+encountered". Arguably, one of these is a _success case_ (for idempotency,
+deleting something that doesn't exist might succeed!) while the other is a
+_failure case_, so not being able to distinguish them is spooky. Regardless, we
+would ideally distinguish these cases to correctly implement the semantics of
+`DELETE`. We could, however, perhaps simply treat both cases as an error.
+
+2) no matter which way we resolve (1), delete's `expectedVersions` would behave
+differently from update's `expectedVersions`.
+
+An alternative would be to implement delete as a generalization of update--i.e.,
+you attempt to delete a particular _version_ of the document, with the requisite
+read-version-then-mutate flow. If another write changes the version of the
+document out from beneath you, the delete fails and is retried. This allows not
+only for an `expectedVersions` option that works _exactly_ like update's option,
+but also opens up the possibility of aborting the delete based on generic
+Javascript evaluation of the current value of the document.
+
+The downsides to this approach are that `deleteMany()` becomes more complicated,
+and that there is a significant performance penalty to delete.  This penalty
+comes on two fronts: first, a delete now requires two round trips to the
+database, roughly doubling the time; and second, delete now has the same
+susceptibility to becoming starved during write-heavy periods as update, which
+is probably relatively surprising to the client--it may not be possible to
+delete an entity if that entity is "busy"!
+
+### My verdict
+
+I'm going to implement delete as a generalized update. That deletes were faster
+than update was nice in an absolute sense, but this was an accident and an
+accident that led to semantic weirdness. In particular, there's no particular
+reason to imagine that deletes dominate updates in typical workloads (indeed,
+it seems likely the opposite is true), and even if they do they are not _worse_
+than updates under the generalized update regime, only worse than the accidental
+naive delete implementation.
+
+While it may be somewhat surprising to the client that deletes trigger an
+optimistic lock, it is quickly and succinctly explained: "Updates and deletes
+are both mutations--mutations trigger an optimistic lock."
+
 ## Return values
 
 ### The problem
 
 So as I've married this more directly to MongoDb, I don't love that methods
-named like MongoDb methods (e..g, `findOne()`) don't return things shaped like
+named like MongoDb methods (e.g., `findOne()`) don't return things shaped like
 what the equivalent MongoDb method returns. I.e., this library returns a
 metadata record containing a `value` field rather than the entity value itself,
 and if no such record exists, throws an exception rather than returning `null`.

@@ -21,12 +21,14 @@ module.exports = class SbOptimisticEntityCollection {
         this.setTimeout = otherOpts.setTimeout || setTimeout;
     }
 
-    deleteMany(q, opts = {}) {
-        return this.collection.deleteMany(this.translateQuery(q), opts);
+    async deleteOne(q, opts = {}) {
+        return (await this.deleteOneRecord(q, opts))
+                .collectionOperationResult;
     }
 
-    deleteOne(q, opts = {}) {
-        return this.collection.deleteOne(this.translateQuery(q), opts);
+    async deleteOneRecord(q, opts = {}) {
+        return await mutateOneRecord.bind(this)(
+                q, deleteMutation.bind(this)(), opts)
     }
 
     find(q, opts = {}) {
@@ -113,134 +115,9 @@ module.exports = class SbOptimisticEntityCollection {
                 .collectionOperationResult;
     }
 
-    async updateOneRecord(
-            q, fn, { expectedVersions, shouldRetry, upsert } = {}) {
-        if (!shouldRetry || shouldRetry === true) {
-            shouldRetry = async tries => {
-                await new Promise(resolve => this.setTimeout(resolve, 200));
-
-                return tries < 3;
-            };
-        }
-
-        expectedVersions =
-                validateAndNormalizeExpectedVersions(expectedVersions);
-
-        let collectionOperationResult;
-        let curRecord;
-        let newValue;
-        let newVersion;
-        let now;
-        let tries = 0;
-
-        do {
-            let oldValue;
-            curRecord = await this.findOneRecord(q);
-
-            if (expectedVersions !== undefined
-                    && !expectedVersions.includes(curRecord.version)) {
-                throw error('VERSION_ASSERTION_FAILED', `Not an expected `
-                        + `version: "${curRecord.version}". Expected one of: `
-                        + `${JSON.stringify(expectedVersions)}`);
-            }
-
-            let op;
-            if (curRecord.value === null) {
-                if (upsert) {
-                    newValue = await fn(
-                            generateDefaultDocForUpsert(q), curRecord);
-
-                    if (!('_id' in newValue)) {
-                        newValue._id = new ObjectId();
-                    }
-
-                    op = async doc => {
-                        let result;
-
-                        try {
-                            result = await this.collection.insertOne(doc);
-                        }
-                        catch (e) {
-                            if (e.code !== 11000) {
-                                throw error('UNEXPECTED_ERROR',
-                                        'Unexpected error.', e);
-                            }
-
-                            // Somebody else inserted in the meantime. We should
-                            // maybe try again...
-                        }
-
-                        return result;
-                    };
-                }
-            }
-            else {
-                const oldId = clone(curRecord.value._id);
-                newValue = await fn(decodeKeys(curRecord.value), curRecord);
-
-                if (newValue && !deepEqual(newValue._id, oldId)) {
-                    const oldIdStr = util.inspect(oldId);
-                    const newIdStr = util.inspect(newValue._id);
-                    throw error('INVALID_UPDATE',
-                            `Cannot modify _id. ${newIdStr} != ${oldIdStr}`);
-                }
-
-                op = async doc => {
-                    let result;
-
-                    result = await this.collection.replaceOne({
-                        _id: curRecord.value._id,
-                        version: curRecord.version
-                    }, doc);
-
-                    if (result.matchedCount === 0) {
-                        // Someone has updated or deleted out from under us. We
-                        // should maybe try again...
-                        result = undefined;
-                    }
-
-                    return result;
-                };
-            }
-
-            if (newValue) {
-                assertValidValue(newValue, 'Result of update function');
-
-                newVersion = bs58.encode(crypto.randomBytes(8));
-                now = new Date(this.nower());
-
-                collectionOperationResult = await op(toMongoDoc(
-                        encodeKeys(newValue),
-                        newVersion,
-                        curRecord.createdAt || now,
-                        now));
-
-                tries++;
-            }
-            else {
-                collectionOperationResult = {
-                    acknowledged: true,
-                    modifiedCount: 0,
-                    upsertedId: null,
-                    upsertedCount: 0,
-                    matchedCount: 0
-                };
-            }
-        } while (!collectionOperationResult && await shouldRetry(tries));
-
-        if (!collectionOperationResult) {
-            throw error('EXHAUSTED_RETRIES',
-                    'Ran out of retries attempting to update by query '
-                    + util.inspect(q));
-        }
-
-        return {
-            collectionOperationResult,
-            createdAt: curRecord.createdAt || now,
-            updatedAt: now || curRecord.updatedAt,
-            value: newValue ? newValue : undefined, // Regularize falsy to undef
-            version: newValue ? newVersion : curRecord.version
-        };
+    async updateOneRecord(q, fn, opts = {}) {
+        return await mutateOneRecord.bind(this)(
+                q, updateMutation.bind(this)(q, fn), opts)
     }
 }
 
@@ -254,6 +131,21 @@ function assertValidValue(v, desc) {
 function decodeKeys(o) {
     return mapKeys(o,
             s => s.replace('%2E', '.').replace('%24', '$').replace('%25', '%'));
+}
+
+function deleteMutation() {
+    return async (curRecord, now, { upsert }) => {
+        const deleteResult = this.collection.deleteOne({
+            _id: curRecord.value._id,
+            version: curRecord.version
+        });
+
+        return {
+            collectionOperationResult: deleteResult,
+            newValue: undefined,
+            newVersion: undefined
+        };
+    };
 }
 
 function encodeKeys(o) {
@@ -347,6 +239,59 @@ function mongoDocToEntityRecord(d) {
     };
 }
 
+async function mutateOneRecord(q, fn, opts = {}) {
+    let { expectedVersions, shouldRetry } = opts;
+
+    if (!shouldRetry || shouldRetry === true) {
+        shouldRetry = async tries => {
+            await new Promise(resolve => this.setTimeout(resolve, 200));
+
+            return tries < 3;
+        };
+    }
+
+    expectedVersions =
+            validateAndNormalizeExpectedVersions(expectedVersions);
+
+    let curRecord;
+    let collectionOperationResult;
+    let newValue;
+    let newVersion;
+    const now = new Date(this.nower());
+    let tries = 0;
+
+    do {
+        curRecord = await this.findOneRecord(q);
+
+        if (expectedVersions !== undefined
+                && !expectedVersions.includes(curRecord.version)) {
+            throw error('VERSION_ASSERTION_FAILED', `Not an expected `
+                    + `version: "${curRecord.version}". Expected one of: `
+                    + `${JSON.stringify(expectedVersions)}`);
+        }
+
+        tries++;
+
+        ({ collectionOperationResult, newValue, newVersion } =
+                await fn(curRecord, now, opts));
+
+    } while (!collectionOperationResult && await shouldRetry(tries));
+
+    if (!collectionOperationResult) {
+        throw error('EXHAUSTED_RETRIES',
+                'Ran out of retries attempting to update by query '
+                + util.inspect(q));
+    }
+
+    return {
+        collectionOperationResult,
+        createdAt: newValue ? (curRecord.createdAt || now) : undefined,
+        updatedAt: newValue ? now : undefined,
+        value: newValue,
+        version: newVersion
+    };
+}
+
 function toMongoDoc(value, version, createdAt, now) {
     const valueWithoutId = { ...value };
     delete valueWithoutId._id;
@@ -364,6 +309,101 @@ function toMongoDoc(value, version, createdAt, now) {
     }
 
     return result;
+}
+
+function updateMutation(q, fn) {
+    return async (curRecord, now, { upsert }) => {
+        let collectionOperationResult;
+        let newValue;
+        let newVersion;
+
+        let op;
+        if (curRecord.value === null) {
+            if (upsert) {
+                newValue = await fn(
+                        generateDefaultDocForUpsert(q), curRecord);
+
+                if (!('_id' in newValue)) {
+                    newValue._id = new ObjectId();
+                }
+
+                op = async doc => {
+                    let result;
+
+                    try {
+                        result = await this.collection.insertOne(doc);
+                    }
+                    catch (e) {
+                        if (e.code !== 11000) {
+                            throw error('UNEXPECTED_ERROR',
+                                    'Unexpected error.', e);
+                        }
+
+                        // Somebody else inserted in the meantime. We should
+                        // maybe try again...
+                    }
+
+                    return result;
+                };
+            }
+        }
+        else {
+            const oldId = clone(curRecord.value._id);
+            newValue = await fn(decodeKeys(curRecord.value), curRecord);
+
+            if (newValue && !deepEqual(newValue._id, oldId)) {
+                const oldIdStr = util.inspect(oldId);
+                const newIdStr = util.inspect(newValue._id);
+                throw error('INVALID_UPDATE',
+                        `Cannot modify _id. ${newIdStr} != ${oldIdStr}`);
+            }
+
+            op = async doc => {
+                let result;
+
+                result = await this.collection.replaceOne({
+                    _id: curRecord.value._id,
+                    version: curRecord.version
+                }, doc);
+
+                if (result.matchedCount === 0) {
+                    // Someone has updated or deleted out from under us. We
+                    // should maybe try again...
+                    result = undefined;
+                }
+
+                return result;
+            };
+        }
+
+        if (newValue) {
+            assertValidValue(newValue, 'Result of update function');
+
+            newVersion = bs58.encode(crypto.randomBytes(8));
+
+            collectionOperationResult = await op(toMongoDoc(
+                    encodeKeys(newValue),
+                    newVersion,
+                    curRecord.createdAt || now,
+                    now));
+        }
+        else {
+            collectionOperationResult = {
+                acknowledged: true,
+                modifiedCount: 0,
+                upsertedId: null,
+                upsertedCount: 0,
+                matchedCount: 0
+            };
+        }
+
+        return {
+            collectionOperationResult,
+            newValue: newValue ?
+                    newValue : undefined, // Regularize falsey to undefined
+            newVersion: newValue ? newVersion : curRecord.version
+        };
+    };
 }
 
 function validateAndNormalizeExpectedVersions(expectedVersions) {
