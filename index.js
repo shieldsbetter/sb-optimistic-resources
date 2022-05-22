@@ -1,5 +1,9 @@
 'use strict';
 
+// XXX: for one, `vdo run-tests` seems to be running an old image with a
+//      spurious console log? for another, do we need a separate `translateXYZ`
+//      to handle indexes? dollar signs get messy maybe
+
 const bs58 = require('bs58');
 const clone = require('clone');
 const crypto = require('crypto');
@@ -36,7 +40,8 @@ module.exports = class SbOptimisticEntityCollection {
     }
 
     findRecords(q, opts = {}) {
-        return this.collection.find(this.translateQuery(q), {})
+        return this.collection
+                .find(SbOptimisticEntityCollection.translateQuery(q), {})
                 .map(mongoDocToEntityRecord);
     }
 
@@ -46,7 +51,8 @@ module.exports = class SbOptimisticEntityCollection {
 
     async findOneRecord(q, opts = {}) {
         const entityDoc =
-                await this.collection.findOne(this.translateQuery(q), opts);
+                await this.collection.findOne(
+                    SbOptimisticEntityCollection.translateQuery(q), opts);
 
         let result;
         if (entityDoc) {
@@ -77,7 +83,7 @@ module.exports = class SbOptimisticEntityCollection {
         const version = bs58.encode(crypto.randomBytes(8));
 
         const collectionOperationResult = await this.collection.insertOne(
-                toMongoDoc(encodeKeys(initialValue), version, now, now), opts);
+                toMongoDoc(initialValue, version, now, now), opts);
 
         return {
             collectionOperationResult,
@@ -86,28 +92,6 @@ module.exports = class SbOptimisticEntityCollection {
             value: initialValue,
             version
         };
-    }
-
-    translateQuery(q) {
-        return mapKeys(q, (k, p) => {
-            let result;
-
-            if (k === '_id' || k.startsWith('$')) {
-                result = k;
-            }
-            else {
-                result = k
-                        .replace('%', '%25')
-                        .replace('$', '%24')
-                        .replace('.', '%2E');
-
-                if (p.length === 0) {
-                    result = 'v_' + result;
-                }
-            }
-
-            return result;
-        });
     }
 
     async updateOne(q, fn, opts) {
@@ -119,6 +103,36 @@ module.exports = class SbOptimisticEntityCollection {
         return await mutateOneRecord.bind(this)(
                 q, updateMutation.bind(this)(q, fn), opts)
     }
+
+    static translateIndexKey(indexKeys) {
+        return mapKeys(indexKeys, (k, p) => {
+            let result;
+
+            if (p.length > 0 || k === '_id' || k === '$**') {
+                result = k;
+            }
+            else {
+                result = `v_${k}`
+            }
+
+            return result;
+        });
+    }
+
+    static translateQuery(q) {
+        return mapKeys(q, (k, p) => {
+            let result;
+
+            if (p.length > 0 || k === '_id' || k.startsWith('$')) {
+                result = k;
+            }
+            else {
+                result = `v_${k}`
+            }
+
+            return result;
+        });
+    }
 }
 
 function assertValidValue(v, desc) {
@@ -126,11 +140,6 @@ function assertValidValue(v, desc) {
         throw error('INVALID_VALUE', `${v} must be a non-array, non-null `
                 + `object. Was: ` + util.inspect(v));
     }
-}
-
-function decodeKeys(o) {
-    return mapKeys(o,
-            s => s.replace('%2E', '.').replace('%24', '$').replace('%25', '%'));
 }
 
 function deleteMutation(confirmDelete = (() => true)) {
@@ -157,11 +166,6 @@ function deleteMutation(confirmDelete = (() => true)) {
             newVersion: confirmed ? undefined : curRecord.version
         };
     };
-}
-
-function encodeKeys(o) {
-    return mapKeys(o,
-            s => s.replace('%', '%25').replace('$', '%24').replace('.', '%2E'));
 }
 
 function error(code, msg, cause) {
@@ -239,7 +243,7 @@ function mapTopLevelKeys(o, map) {
 }
 
 function mongoDocToEntityRecord(d) {
-    const value = decodeKeys(extractKeysWithPrefix(d, 'v_'));
+    const value = extractKeysWithPrefix(d, 'v_');
     value._id = d._id;
 
     return {
@@ -360,7 +364,7 @@ function updateMutation(q, fn) {
         }
         else {
             const oldId = clone(curRecord.value._id);
-            newValue = await fn(decodeKeys(curRecord.value), curRecord);
+            newValue = await fn(curRecord.value, curRecord);
 
             if (newValue && !deepEqual(newValue._id, oldId)) {
                 const oldIdStr = util.inspect(oldId);
@@ -393,7 +397,7 @@ function updateMutation(q, fn) {
             newVersion = bs58.encode(crypto.randomBytes(8));
 
             collectionOperationResult = await op(toMongoDoc(
-                    encodeKeys(newValue),
+                    newValue,
                     newVersion,
                     curRecord.createdAt || now,
                     now));
