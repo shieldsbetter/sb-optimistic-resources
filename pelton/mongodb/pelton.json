@@ -1,0 +1,15 @@
+{
+    "projectName": "mongodb",
+    "projectDnsName": "mongodb",
+
+    "printScriptRunnerDockerfile": "cat ../script-runner.Dockerfile",
+
+    "configurations": {
+        "default": {
+
+        },
+        "test": {
+            "printStaticDependencies": "bash print-static-deps"
+        }
+    }
+}

@@ -1,0 +1,19 @@
+#!/bin/bash
+
+set -e
+
+cd $(dirname "$0")
+
+function supportedVersion() {
+    (
+        export MONGO_IMAGE_TAG=$1
+        export MONGO_IMAGE_TAG_DNS=$(echo $1 | tr '.' '-')
+
+        cat test-job-container.yaml | envsubst
+    )
+}
+
+cat test-job.yaml | envsubst
+for image in $(cat mongodb/supported-mongo-images); do
+    supportedVersion $image
+done

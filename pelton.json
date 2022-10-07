@@ -1,0 +1,23 @@
+{
+    "projectName": "sb-optimistic-entities",
+    "projectDnsName": "sboptent",
+
+    "printScriptRunnerDockerfile": "cat pelton/script-runner.Dockerfile",
+
+    "configurations": {
+        "default": {
+
+        },
+        "test": {
+            "buildImage": "DOCKER_BUILDKIT=1 docker build --file pelton/test-runner.Dockerfile --tag $PELTON_IMAGE_TAG .",
+            "printService": "bash pelton/print-test-job",
+            "jobName": "run-tests-job",
+            "dynamicDependencies": {
+                "mongodb": {
+                    "navigate": "cd pelton/mongodb",
+                    "configuration": "test"
+                }
+            }
+        }
+    }
+}
