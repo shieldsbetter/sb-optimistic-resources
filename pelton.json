@@ -11,7 +11,7 @@
         "test": {
             "buildImage": "DOCKER_BUILDKIT=1 docker build --file pelton/test-runner.Dockerfile --tag $PELTON_IMAGE_TAG .",
             "printService": "bash pelton/print-test-job",
-            "jobName": "run-tests-job",
+            "jobPodSelector": "test-job=sb-optimistic-entities",
             "dynamicDependencies": {
                 "mongodb": {
                     "navigate": "cd pelton/mongodb",
