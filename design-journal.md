@@ -1,5 +1,123 @@
 # Design Journal
 
+## Metadata
+
+### The problem
+
+Previous iterations of this library had separated the "value" of an entity,
+which was established by the client, from the entity's metadata, which was
+maintained by `sb-optimistic-entities` and including things like when the entity
+was created and when it was last updated, for example. I liked this for a couple
+of reasons:
+
+1) If the client put it `{_id: "x", foo: "bar"}`, then they'd get out
+   `{_id: "x", foo: "bar"}`, which keeps things simple.
+2) Name-clashes are handled easily. User-specified fields and system fields are
+   kept in entirely different "namespaces".
+
+That said, those two namespaces need to live together in a single MongoDb
+document, so a convention is required for separating them, and keeping that
+convention transparent to the client becomes increasingly complicated the more
+advanced MongoDb features you want to expose. In particular: how does the client
+specify a sorting function first by "foo", then by "createdAt" if they live in
+separate namespaces? How does the client include "createdAt" in a MongoDb
+aggregation pipeline and how do we parse that pipeline to determine which things
+are intended as instructions for MongoDb and which are intended as instructions
+for us?
+
+On the balance, I think the better compromise is to include metadata as
+`sb-optimistic-entities`-managed fields that are first class members of an
+entity's value, mirroring how MongoDb includes `_id` as part of a document's
+value. This means the client can query, sort, and reason about these fields
+using normal MongoDb constructs without intervention from us.
+
+The downsides are:
+
+1) If the client adds `{_id: "x", foo: "bar"}` they now get
+back `{_id: "x", foo: "bar", ...some other stuff we added...}`
+2) Field clashes are not a possibility and must be addressed.
+
+While Number 1 is less than ideal, it's easily explained and mirrors what the
+client is already accustomed to with MongoDb (after all, had they added
+`{foo: "bar"}` they'd've gotten back `{_id: ObjectId(...), foo: "bar"}`).
+
+Number 2 is more fraught, so let's work through some options:
+
+### Potential solutions
+
+#### Option 1: No collision-resistance
+
+We could just add our `createdBy` alongside the client's `foo`. The biggest
+problem here is future-proofing. If we want to add a field in the future, it
+becomes a breaking change.
+
+#### Option 1: Explicit client namespace
+
+We could confine the user to editing a subtree rooted in some top level field.
+
+```json
+{
+    "_id": "plugh",
+    "createAt": "...",
+    "value": {
+        "foo": "bar"
+    }
+}
+```
+
+I don't love this for two reasons:
+
+1) Many Mongo tools get clunky when working with structured data that lives
+   below the top level. (Mongo Express, for example, displays individual columns
+   for top-level fields, but then JSON.stringify()s structured data below the
+   top-level.) So moving the client's data, which is the most important data,
+   off the top level seems ill-advised.
+2) The client's data is the data they'll want to query and manipulate the most,
+   so adding a `value.` to every single attempt to access that data seems like a
+   pain.
+
+#### Option 3: Explicit system namespace
+
+This is the inverse of Option 2.
+
+```json
+{
+    "_id": "plugh",
+    "$sboe": {
+        "createdAt": "..."
+    },
+    "foo": "bar"
+}
+```
+
+I don't love giving the user restrictions on what their keys can be, but with a
+carefully-chosen top level field name, it's unlikely to matter.  Again we run
+into the issue that many tools may treat the `$sboe` top level field as a blob.
+
+#### Option 4: Prefix/Suffixed client values
+
+I include this only for completeness as it's pretty clearly a bad idea. But in
+previous iterations where we were actively munging names, we included top-level
+client fields alongside metadata fields by prefixing them with `v_` for "value".
+
+It seems like a non-starter to make the client prefix all their top level fields
+with something like `c_`.
+
+#### Option 5: Prefix/Suffixed system values
+
+I think I favor this one.
+
+`createdBy`, etc., could live alongside top-level client fields, suffixed by
+`_sboe`. It's relatively ugly, but it keeps useful data at the top level where
+it will be displayed and manipulated nicely by available tools, it's easy to
+explain, and forbidding the user from using a suffix like that on their top
+level fields shouldn't be burdensome.
+
+### My verdict
+
+In many ways it's the ugliest solution, but I think Option 5 has the most
+reasonable tradeoffs, so I think I'll go with it for the moment.
+
 ## Delete mechanism
 
 ### The problem

@@ -1,6 +1,6 @@
 'use strict';
 
-const DataSlotCollection = require('../../index');
+const SbOptEnt = require('../../index');
 const dateToMs = require('../dates-to-ms');
 const hermeticTest = require('../hermetic-test');
 const test = require('ava');
@@ -8,77 +8,67 @@ const updateWithInterleaving = require('../update-with-interleaving');
 
 test('basic insert and findOne - with id',
         hermeticTest(async (t, { dbClient }) => {
-    const dsc = new DataSlotCollection(dbClient.collection('foo'), {
+    const sboe = new SbOptEnt(dbClient.collection('foo'), {
         log: t.log.bind(t),
         nower: () => 123
     });
 
-    const insertResult = dateToMs(await dsc.insertOneRecord({
+    const insertResult = dateToMs(await sboe.insertOneRecord({
         _id: 'foo',
         bar: 'barval'
     }));
 
     t.truthy(insertResult.collectionOperationResult);
-    delete insertResult.collectionOperationResult;
 
-    t.deepEqual(insertResult, {
-        createdAt: 123,
-        updatedAt: 123,
-        value: {
-            _id: 'foo',
-            bar: 'barval'
-        },
-        version: insertResult.version
+    t.deepEqual(insertResult.document, {
+        _id: 'foo',
+        bar: 'barval',
+        createdAt_sboe: 123,
+        updatedAt_sboe: 123,
+        version_sboe: insertResult.document.version_sboe
     });
 
-    const findResult = dateToMs(await dsc.findOneRecord({ _id: 'foo' }));
+    const findResult = dateToMs(await sboe.findOne({ _id: 'foo' }));
 
     t.deepEqual(findResult, {
-        createdAt: 123,
-        updatedAt: 123,
-        value: {
-            _id: 'foo',
-            bar: 'barval'
-        },
-        version: insertResult.version
+        _id: 'foo',
+        bar: 'barval',
+        createdAt_sboe: 123,
+        updatedAt_sboe: 123,
+        version_sboe: insertResult.document.version_sboe
     });
 }));
 
 test('basic insert and findOne - no id',
         hermeticTest(async (t, { dbClient }) => {
-    const dsc = new DataSlotCollection(dbClient.collection('foo'), {
+    const sboe = new SbOptEnt(dbClient.collection('foo'), {
         log: t.log.bind(t),
         nower: () => 123
     });
 
-    const insertResult = dateToMs(await dsc.insertOneRecord({
+    const insertResult = dateToMs(await sboe.insertOneRecord({
         bar: 'barval'
     }));
 
     t.truthy(insertResult.collectionOperationResult);
-    delete insertResult.collectionOperationResult;
 
-    t.deepEqual(insertResult, {
-        createdAt: 123,
-        updatedAt: 123,
-        value: {
-            _id: insertResult.value._id,
-            bar: 'barval'
-        },
-        version: insertResult.version
+    t.deepEqual(insertResult.document, {
+        _id: insertResult.document._id,
+        bar: 'barval',
+        createdAt_sboe: 123,
+        updatedAt_sboe: 123,
+        version_sboe: insertResult.document.version_sboe
     });
 
-    const findResult = dateToMs(
-            await dsc.findOneRecord({ _id: insertResult.value._id }));
+    const findResult =
+            dateToMs(await sboe.findOne({ _id: insertResult.document._id }));
 
     t.deepEqual(findResult, {
-        createdAt: 123,
-        updatedAt: 123,
-        value: {
-            _id: insertResult.value._id,
-            bar: 'barval'
-        },
-        version: insertResult.version
+        _id: insertResult.document._id,
+        bar: 'barval',
+        createdAt_sboe: 123,
+        updatedAt_sboe: 123,
+        version_sboe: insertResult.document.version_sboe
     });
 }));
 
@@ -86,12 +76,12 @@ test('basic insert, update, and findOne',
         hermeticTest(async (t, { dbClient }) => {
 
     let now = 123;
-    const dsc = new DataSlotCollection(dbClient.collection('foo'), {
+    const sboe = new SbOptEnt(dbClient.collection('foo'), {
         log: t.log.bind(t),
         nower: () => now
     });
 
-    const insertResult = dateToMs(await dsc.insertOneRecord({
+    const insertResult = dateToMs(await sboe.insertOneRecord({
         _id: 'foo',
         bar: 'barval',
         bazz: 'bazzval'
@@ -99,39 +89,37 @@ test('basic insert, update, and findOne',
 
     now = 124;
     const updateResult =
-            dateToMs(await dsc.updateOneRecord({ _id: 'foo' }, v => ({
-        _id: v._id,
-        bar: v.bar,
-        plugh: 'plughval'
-    })));
+            dateToMs(await sboe.updateOneRecord({ _id: 'foo' }, v => {
+
+        v.plugh = 'plughval';
+        delete v.bazz;
+
+        return v;
+    }));
 
     t.truthy(updateResult.collectionOperationResult);
-    delete updateResult.collectionOperationResult;
 
-    t.deepEqual(updateResult, {
-        createdAt: 123,
-        updatedAt: 124,
-        value: {
-            _id: 'foo',
-            bar: 'barval',
-            plugh: 'plughval'
-        },
-        version: updateResult.version
+    t.deepEqual(updateResult.document, {
+        _id: 'foo',
+        bar: 'barval',
+        createdAt_sboe: 123,
+        plugh: 'plughval',
+        updatedAt_sboe: 124,
+        version_sboe: updateResult.document.version_sboe
     });
 
-    t.not(updateResult.version, insertResult.version);
+    t.not(updateResult.document.version_sboe,
+            insertResult.document.version_sboe);
 
-    const findResult = dateToMs(await dsc.findOneRecord({ _id: 'foo' }));
+    const findResult = dateToMs(await sboe.findOne({ _id: 'foo' }));
 
     t.deepEqual(findResult, {
-        createdAt: 123,
-        updatedAt: 124,
-        value: {
-            _id: 'foo',
-            bar: 'barval',
-            plugh: 'plughval'
-        },
-        version: updateResult.version
+        _id: 'foo',
+        bar: 'barval',
+        createdAt_sboe: 123,
+        plugh: 'plughval',
+        updatedAt_sboe: 124,
+        version_sboe: updateResult.document.version_sboe
     });
 }));
 
@@ -139,163 +127,125 @@ test('basic insert, update, and findOne - mongo style',
         hermeticTest(async (t, { dbClient }) => {
 
     let now = 123;
-    const dsc = new DataSlotCollection(dbClient.collection('foo'), {
+    const sboe = new SbOptEnt(dbClient.collection('foo'), {
+        generateId: () => 'id1',
         log: t.log.bind(t),
         nower: () => now
     });
 
-    const insertResult = dateToMs(await dsc.insertOne({
+    const insertResult = dateToMs(await sboe.insertOne({
         _id: 'foo',
         bar: 'barval',
         bazz: 'bazzval'
     }));
 
     t.truthy(insertResult);
-    t.falsy(insertResult.value);
+    t.falsy(insertResult.document);
 
     now = 124;
-    const updateResult = dateToMs(await dsc.updateOne({ _id: 'foo' }, v => ({
-        _id: v._id,
-        bar: v.bar,
-        plugh: 'plughval'
-    })));
+    const updateResult = dateToMs(await sboe.updateOne({ _id: 'foo' }, v => {
+
+        v.plugh = 'plughval';
+        delete v.bazz;
+
+        return v;
+    }));
 
     t.truthy(updateResult);
-    t.falsy(updateResult.value);
+    t.falsy(updateResult.document);
 
-    const findResult = dateToMs(await dsc.findOne({ _id: 'foo' }));
+    const findResult = dateToMs(await sboe.findOne({ _id: 'foo' }));
 
     t.deepEqual(findResult, {
         _id: 'foo',
         bar: 'barval',
-        plugh: 'plughval'
+        createdAt_sboe: 123,
+        plugh: 'plughval',
+        updatedAt_sboe: 124,
+        version_sboe: findResult.version_sboe
     });
 }));
 
 test('find by something other than _id',
         hermeticTest(async (t, { dbClient }) => {
-    const dsc = new DataSlotCollection(dbClient.collection('foo'), {
+    const sboe = new SbOptEnt(dbClient.collection('foo'), {
         log: t.log.bind(t),
         nower: () => 123
     });
 
-    const insertResult = dateToMs(await dsc.insertOneRecord({
+    const insertResult = dateToMs(await sboe.insertOneRecord({
         _id: 'foo',
         bar: 'barval'
     }));
 
     t.truthy(insertResult.collectionOperationResult);
-    delete insertResult.collectionOperationResult;
 
-    const findResult =
-            dateToMs(await dsc.findOneRecord({ bar: { $exists: true } }));
+    const findResult = dateToMs(await sboe.findOne({ bar: { $exists: true } }));
 
     t.deepEqual(findResult, {
-        createdAt: 123,
-        updatedAt: 123,
-        value: {
-            _id: 'foo',
-            bar: 'barval'
-        },
-        version: insertResult.version
+        _id: 'foo',
+        bar: 'barval',
+        createdAt_sboe: 123,
+        updatedAt_sboe: 123,
+        version_sboe: insertResult.document.version_sboe
     });
 }));
 
 test('find many', hermeticTest(async (t, { dbClient }) => {
-    const dsc = new DataSlotCollection(dbClient.collection('foo'), {
+    const sboe = new SbOptEnt(dbClient.collection('foo'), {
         log: t.log.bind(t),
         nower: () => 123
     });
 
-    const insertResult1 = dateToMs(await dsc.insertOneRecord({
+    const insertResult1 = dateToMs(await sboe.insertOneRecord({
         _id: 'foo',
         toBeReturned: true
     }));
 
-    const insertResult2 = dateToMs(await dsc.insertOneRecord({
+    const insertResult2 = dateToMs(await sboe.insertOneRecord({
         _id: 'bar'
     }));
 
-    const insertResult3 = dateToMs(await dsc.insertOneRecord({
+    const insertResult3 = dateToMs(await sboe.insertOneRecord({
         _id: 'bazz',
         toBeReturned: true
     }));
 
-    const findCursor = dsc.findRecords({ toBeReturned: true });
-    const findDocs = (await findCursor.toArray()).map(dateToMs);
-
-    t.deepEqual(findDocs, [
-        {
-            createdAt: 123,
-            updatedAt: 123,
-            value: {
-                _id: 'foo',
-                toBeReturned: true
-            },
-            version: insertResult1.version
-        },
-        {
-            createdAt: 123,
-            updatedAt: 123,
-            value: {
-                _id: 'bazz',
-                toBeReturned: true
-            },
-            version: insertResult3.version
-        }
-    ]);
-}));
-
-test('find many - mongo style', hermeticTest(async (t, { dbClient }) => {
-    const dsc = new DataSlotCollection(dbClient.collection('foo'), {
-        log: t.log.bind(t),
-        nower: () => 123
-    });
-
-    const insertResult1 = dateToMs(await dsc.insertOneRecord({
-        _id: 'foo',
-        toBeReturned: true
-    }));
-
-    const insertResult2 = dateToMs(await dsc.insertOneRecord({
-        _id: 'bar'
-    }));
-
-    const insertResult3 = dateToMs(await dsc.insertOneRecord({
-        _id: 'bazz',
-        toBeReturned: true
-    }));
-
-    const findCursor = dsc.find({ toBeReturned: true });
+    const findCursor = sboe.find({ toBeReturned: true });
     const findDocs = (await findCursor.toArray()).map(dateToMs);
 
     t.deepEqual(findDocs, [
         {
             _id: 'foo',
-            toBeReturned: true
+            createdAt_sboe: 123,
+            toBeReturned: true,
+            updatedAt_sboe: 123,
+            version_sboe: insertResult1.document.version_sboe
         },
         {
             _id: 'bazz',
-            toBeReturned: true
+            createdAt_sboe: 123,
+            toBeReturned: true,
+            updatedAt_sboe: 123,
+            version_sboe: insertResult3.document.version_sboe
         }
     ]);
 }));
 
 test('assert wrong version', hermeticTest(async (t, { dbClient }) => {
-    const dsc = new DataSlotCollection(dbClient.collection('foo'), {
+    const sboe = new SbOptEnt(dbClient.collection('foo'), {
         log: t.log.bind(t)
     });
 
-    await dsc.insertOneRecord({
+    await sboe.insertOneRecord({
         _id: 'foo',
         bar: 'barval',
         bazz: 'bazzval'
     });
 
     const error = await t.throwsAsync(
-            dsc.updateOneRecord({ _id: 'foo' }, v => ({
-        _id: v._id,
-        bar: v.bar,
+            sboe.updateOneRecord({ _id: 'foo' }, v => ({
+        ...v,
         plugh: 'plughval'
     }), { expectedVersions: 'abcdefghi' }));
 
@@ -303,47 +253,122 @@ test('assert wrong version', hermeticTest(async (t, { dbClient }) => {
 }));
 
 test('assert correct version', hermeticTest(async (t, { dbClient }) => {
-    const dsc = new DataSlotCollection(dbClient.collection('foo'), {
+    const sboe = new SbOptEnt(dbClient.collection('foo'), {
         log: t.log.bind(t)
     });
 
-    const insertResult = dateToMs(await dsc.insertOneRecord({
+    const insertResult = dateToMs(await sboe.insertOneRecord({
         _id: 'foo',
         bar: 'barval',
         bazz: 'bazzval'
     }));
 
-    await dsc.updateOneRecord({ _id: 'foo' }, v => ({
-        _id: v._id,
-        bar: v.bar,
+    await sboe.updateOneRecord({ _id: 'foo' }, v => ({
+        ...v,
         plugh: 'plughval'
-    }), insertResult.version);
+    }), insertResult.document.version_sboe);
 
     t.pass();
 }));
 
 test('cannot update id', hermeticTest(async (t, { dbClient }) => {
-    const dsc = new DataSlotCollection(dbClient.collection('foo'), {
+    const sboe = new SbOptEnt(dbClient.collection('foo'), {
         log: t.log.bind(t)
     });
 
-    const insertResult = dateToMs(await dsc.insertOneRecord({
-        _id: 'foo',
-        bar: 'barval',
-        bazz: 'bazzval'
+    const insertResult = dateToMs(await sboe.insertOneRecord({
+        _id: 'foo'
     }));
 
-    const e = await t.throwsAsync(dsc.updateOneRecord({ _id: 'foo' }, v => ({
+    const e = await t.throwsAsync(sboe.updateOneRecord({ _id: 'foo' }, v => ({
+        ...v,
+
         _id: 'waldo',
-        bar: v.bar,
-        plugh: 'plughval'
-    }), insertResult.version));
+    })));
 
     t.is(e.code, 'INVALID_UPDATE');
 }));
 
+test('cannot update createdAt_sboe', hermeticTest(async (t, { dbClient }) => {
+    const sboe = new SbOptEnt(dbClient.collection('foo'), {
+        log: t.log.bind(t)
+    });
+
+    const insertResult = dateToMs(await sboe.insertOneRecord({
+        _id: 'foo'
+    }));
+
+    const e = await t.throwsAsync(sboe.updateOneRecord({ _id: 'foo' }, v => ({
+        ...v,
+
+        createdAt_sboe: new Date(0)
+    })));
+
+    t.is(e.code, 'INVALID_UPDATE');
+}));
+
+test('cannot update updatedAt_sboe', hermeticTest(async (t, { dbClient }) => {
+    const sboe = new SbOptEnt(dbClient.collection('foo'), {
+        log: t.log.bind(t)
+    });
+
+    const insertResult = dateToMs(await sboe.insertOneRecord({
+        _id: 'foo'
+    }));
+
+    const e = await t.throwsAsync(sboe.updateOneRecord({ _id: 'foo' }, v => ({
+        ...v,
+
+        updatedAt_sboe: new Date(0)
+    })));
+
+    t.is(e.code, 'INVALID_UPDATE');
+}));
+
+test('cannot update version_sboe', hermeticTest(async (t, { dbClient }) => {
+    const sboe = new SbOptEnt(dbClient.collection('foo'), {
+        log: t.log.bind(t)
+    });
+
+    const insertResult = dateToMs(await sboe.insertOneRecord({
+        _id: 'foo'
+    }));
+
+    const e = await t.throwsAsync(sboe.updateOneRecord({ _id: 'foo' }, v => ({
+        ...v,
+
+        version_sboe: new Date(0)
+    })));
+
+    t.is(e.code, 'INVALID_UPDATE');
+}));
+
+test('may omit protected fields', hermeticTest(async (t, { dbClient }) => {
+    const sboe = new SbOptEnt(dbClient.collection('foo'), {
+        log: t.log.bind(t)
+    });
+
+    const insertResult = dateToMs(await sboe.insertOneRecord({
+        _id: 'foo',
+        bar: 'barval'
+    }));
+
+    const updateResult = dateToMs(await sboe.updateOneRecord(
+            { _id: 'foo' }, v => ({
+                bazz: 'bazzval'
+            })));
+
+    t.deepEqual(updateResult.document, {
+        _id: 'foo',
+        bazz: 'bazzval',
+        createdAt_sboe: insertResult.document.createdAt_sboe,
+        updatedAt_sboe: updateResult.document.updatedAt_sboe,
+        version_sboe: updateResult.document.version_sboe
+    });
+}));
+
 test('interleaved updated', hermeticTest(async (t, { dbClient }) => {
-    const dcc = new DataSlotCollection(dbClient.collection('foo'), {
+    const dcc = new SbOptEnt(dbClient.collection('foo'), {
         log: t.log.bind(t)
     });
 
@@ -373,14 +398,14 @@ test('interleaved updated', hermeticTest(async (t, { dbClient }) => {
         }, { log: t.log.bind(t) }
     );
 
-    const findValue = await dcc.findOneRecord({ _id: 'bar' });
+    const findValue = await dcc.findOne({ _id: 'bar' });
 
     // Update #2 happened first, and then update #1 retried...
-    t.is(findValue.value.bazz, 'bazzval1');
+    t.is(findValue.bazz, 'bazzval1');
 }));
 
 test('no update', hermeticTest(async (t, { dbClient }) => {
-    const dcc = new DataSlotCollection(dbClient.collection('foo'), {
+    const dcc = new SbOptEnt(dbClient.collection('foo'), {
         log: t.log.bind(t),
         nower: () => 123
     });
@@ -392,21 +417,19 @@ test('no update', hermeticTest(async (t, { dbClient }) => {
 
     await dcc.updateOneRecord({ _id: 'foo' }, () => {})
 
-    const findResult = dateToMs(await dcc.findOneRecord({ _id: 'foo' }));
+    const findResult = dateToMs(await dcc.findOne({ _id: 'foo' }));
 
     t.deepEqual(findResult, {
-        createdAt: 123,
-        updatedAt: 123,
-        value: {
-            _id: 'foo',
-            bar: 'barval'
-        },
-        version: findResult.version
+        _id: 'foo',
+        bar: 'barval',
+        createdAt_sboe: 123,
+        updatedAt_sboe: 123,
+        version_sboe: findResult.version_sboe
     });
 }));
 
 test('run out of retries', hermeticTest(async (t, { dbClient }) => {
-    const dcc = new DataSlotCollection(dbClient.collection('foo'), {
+    const dcc = new SbOptEnt(dbClient.collection('foo'), {
         log: t.log.bind(t)
     });
 
@@ -448,7 +471,7 @@ test('run out of retries', hermeticTest(async (t, { dbClient }) => {
 
 test('run out of retries - shouldRetry = true', hermeticTest(
         async (t, { dbClient }) => {
-    const dcc = new DataSlotCollection(dbClient.collection('foo'), {
+    const dcc = new SbOptEnt(dbClient.collection('foo'), {
         log: t.log.bind(t)
     });
 
@@ -489,7 +512,7 @@ test('run out of retries - shouldRetry = true', hermeticTest(
 }));
 
 test('bad value type', hermeticTest(async (t, { dbClient }) => {
-    const dcc = new DataSlotCollection(dbClient.collection('foo'), {
+    const dcc = new SbOptEnt(dbClient.collection('foo'), {
         log: t.log.bind(t)
     });
 
@@ -499,7 +522,7 @@ test('bad value type', hermeticTest(async (t, { dbClient }) => {
 }));
 
 test('array value', hermeticTest(async (t, { dbClient }) => {
-    const dcc = new DataSlotCollection(dbClient.collection('foo'), {
+    const dcc = new SbOptEnt(dbClient.collection('foo'), {
         log: t.log.bind(t)
     });
 
@@ -509,7 +532,7 @@ test('array value', hermeticTest(async (t, { dbClient }) => {
 }));
 
 test('null value', hermeticTest(async (t, { dbClient }) => {
-    const dcc = new DataSlotCollection(dbClient.collection('foo'), {
+    const dcc = new SbOptEnt(dbClient.collection('foo'), {
         log: t.log.bind(t)
     });
 
@@ -519,17 +542,17 @@ test('null value', hermeticTest(async (t, { dbClient }) => {
 }));
 
 test('bad version string', hermeticTest(async (t, { dbClient }) => {
-    const dsc = new DataSlotCollection(dbClient.collection('foo'), {
+    const sboe = new SbOptEnt(dbClient.collection('foo'), {
         log: t.log.bind(t)
     });
 
-    const insertResult = dateToMs(await dsc.insertOneRecord({
+    const insertResult = dateToMs(await sboe.insertOneRecord({
         _id: 'foo',
         bar: 'barval',
         bazz: 'bazzval'
     }));
 
-    const e = await t.throwsAsync(dsc.updateOneRecord({ _id: 'foo' }, v => ({
+    const e = await t.throwsAsync(sboe.updateOneRecord({ _id: 'foo' }, v => ({
         _id: v._id,
         bar: v.bar,
         plugh: 'plughval'
@@ -539,22 +562,22 @@ test('bad version string', hermeticTest(async (t, { dbClient }) => {
 }));
 
 test('findOne missing', hermeticTest(async (t, { dbClient }) => {
-    const dsc = new DataSlotCollection(dbClient.collection('foo'), {
+    const sboe = new SbOptEnt(dbClient.collection('foo'), {
         log: t.log.bind(t)
     });
 
-    const findResult = await dsc.findOneRecord({ _id: 'foo' });
+    const findResult = await sboe.findOne({ _id: 'foo' });
 
-    t.deepEqual(findResult, { value: null });
+    t.is(findResult, null);
 }));
 
 test('weird error during update', hermeticTest(async (t, { dbClient }) => {
     const colClient = dbClient.collection('foo');
-    const dsc = new DataSlotCollection(colClient, {
+    const sboe = new SbOptEnt(colClient, {
         log: t.log.bind(t)
     });
 
-    await dsc.insertOneRecord({
+    await sboe.insertOneRecord({
         _id: 'foo',
         bar: 'barval',
         bazz: 'bazzval'
@@ -562,26 +585,24 @@ test('weird error during update', hermeticTest(async (t, { dbClient }) => {
 
     colClient.replaceOneError = new Error('out of cheese');
     const error = await t.throwsAsync(
-            dsc.updateOneRecord({ _id: 'foo' }, v => ({
-        _id: v._id,
-        bar: v.bar,
-        plugh: 'plughval'
-    })));
+            sboe.updateOneRecord({ _id: 'foo' }, v => ({
+                ...v,
+                plugh: 'plugval'
+            })));
 
     t.is(error.message, 'out of cheese');
 }));
 
 test('weird error during upsert', hermeticTest(async (t, { dbClient }) => {
     const colClient = dbClient.collection('foo');
-    const dsc = new DataSlotCollection(colClient, {
+    const sboe = new SbOptEnt(colClient, {
         log: t.log.bind(t)
     });
 
     colClient.insertOneError = new Error('out of cheese');
     const error = await t.throwsAsync(
-            dsc.updateOneRecord({ _id: 'foo' }, v => ({
-        _id: v._id,
-        bar: v.bar,
+            sboe.updateOneRecord({ _id: 'foo' }, v => ({
+        ...v,
         plugh: 'plughval'
     }), { upsert: true }));
 
@@ -592,109 +613,101 @@ test('weird error during upsert', hermeticTest(async (t, { dbClient }) => {
 
 test('weird key', hermeticTest(async (t, { dbClient }) => {
     let now = 123;
-    const dsc = new DataSlotCollection(dbClient.collection('foo'), {
+    const sboe = new SbOptEnt(dbClient.collection('foo'), {
         log: t.log.bind(t),
         nower: () => now
     });
 
-    const insertResult = dateToMs(await dsc.insertOneRecord({
+    const insertResult = dateToMs(await sboe.insertOneRecord({
         _id: 'foo',
         '%$%.%bar': 'barval'
     }));
 
     now = 124;
-    const updateResult = dateToMs(await dsc.updateOneRecord(
+    const updateResult = dateToMs(await sboe.updateOneRecord(
             { _id: 'foo' }, v => ({
-        _id: v._id,
+        ...v,
         '%$%.%bar': v['%$%.%bar'] + 'also'
     })));
 
     t.truthy(updateResult.collectionOperationResult);
-    delete updateResult.collectionOperationResult;
 
-    t.deepEqual(updateResult, {
-        createdAt: 123,
-        updatedAt: 124,
-        value: {
-            _id: 'foo',
-            '%$%.%bar': 'barvalalso'
-        },
-        version: updateResult.version
+    t.deepEqual(updateResult.document, {
+        '%$%.%bar': 'barvalalso',
+        _id: 'foo',
+        createdAt_sboe: 123,
+        updatedAt_sboe: 124,
+        version_sboe: updateResult.document.version_sboe
     });
 
-    t.not(updateResult.version, insertResult.version);
+    t.not(updateResult.document.version_sboe,
+            insertResult.document.version_sboe);
 
-    const findResult = dateToMs(await dsc.findOneRecord({ _id: 'foo' }));
+    const findResult = dateToMs(await sboe.findOne({ _id: 'foo' }));
 
     t.deepEqual(findResult, {
-        createdAt: 123,
-        updatedAt: 124,
-        value: {
-            _id: 'foo',
-            '%$%.%bar': 'barvalalso'
-        },
-        version: updateResult.version
+        '%$%.%bar': 'barvalalso',
+        _id: 'foo',
+        createdAt_sboe: 123,
+        updatedAt_sboe: 124,
+        version_sboe: updateResult.document.version_sboe
     });
 }));
 
-test('weird keyin array', hermeticTest(async (t, { dbClient }) => {
+test('weird key in array', hermeticTest(async (t, { dbClient }) => {
     let now = 123;
-    const dsc = new DataSlotCollection(dbClient.collection('foo'), {
+    const sboe = new SbOptEnt(dbClient.collection('foo'), {
         log: t.log.bind(t),
         nower: () => now
     });
 
-    const insertResult = dateToMs(await dsc.insertOneRecord({
+    const insertResult = dateToMs(await sboe.insertOneRecord({
         _id: 'foo',
         bar: [{ '%$%.%bazz': 'bazzval' }]
     }));
 
     now = 124;
-    const updateResult = dateToMs(await dsc.updateOneRecord(
+    const updateResult = dateToMs(await sboe.updateOneRecord(
             { _id: 'foo' }, v => ({
-        _id: v._id,
+        ...v,
+
         bar: [{ '%$%.%bazz': v.bar[0]['%$%.%bazz'] + 'also' }]
     })));
 
     t.truthy(updateResult.collectionOperationResult);
-    delete updateResult.collectionOperationResult;
 
-    t.deepEqual(updateResult, {
-        createdAt: 123,
-        updatedAt: 124,
-        value: {
-            _id: 'foo',
-            bar: [{ '%$%.%bazz': 'bazzvalalso' }]
-        },
-        version: updateResult.version
+    t.deepEqual(updateResult.document, {
+        _id: 'foo',
+        bar: [{ '%$%.%bazz': 'bazzvalalso' }],
+        createdAt_sboe: 123,
+        updatedAt_sboe: 124,
+        version_sboe: updateResult.document.version_sboe
     });
 
-    t.not(updateResult.version, insertResult.version);
+    t.not(updateResult.document.version_sboe,
+            insertResult.document.version_sboe);
 
-    const findResult = dateToMs(await dsc.findOneRecord({ _id: 'foo' }));
+    const findResult = dateToMs(await sboe.findOne({ _id: 'foo' }));
 
     t.deepEqual(findResult, {
-        createdAt: 123,
-        updatedAt: 124,
-        value: {
-            _id: 'foo',
-            bar: [{ '%$%.%bazz': 'bazzvalalso' }]
-        },
-        version: updateResult.version
+        _id: 'foo',
+        bar: [{ '%$%.%bazz': 'bazzvalalso' }],
+        createdAt_sboe: 123,
+        updatedAt_sboe: 124,
+        version_sboe: updateResult.document.version_sboe
     });
 }));
 
-test('update non-existent',
-        hermeticTest(async (t, { dbClient }) => {
+test('update non-existent', hermeticTest(async (t, { dbClient }) => {
 
     let now = 123;
-    const dsc = new DataSlotCollection(dbClient.collection('foo'), {
+    const sboe = new SbOptEnt(dbClient.collection('foo'), {
         log: t.log.bind(t),
         nower: () => now
     });
 
     let ran = false;
-    const updateResult = await dsc.updateOneRecord({ _id: 'foo' }, v => {
+    const updateResult = await sboe.updateOneRecord({ _id: 'foo' }, v => {
         ran = true;
 
         return {
@@ -708,28 +721,21 @@ test('update non-existent',
 
     t.deepEqual(updateResult.collectionOperationResult.matchedCount, 0);
     t.deepEqual(updateResult.collectionOperationResult.modifiedCount, 0);
-    delete updateResult.collectionOperationResult;
 
-    t.deepEqual(updateResult, {
-        createdAt: undefined,
-        updatedAt: undefined,
-        value: undefined,
-        version: undefined
-    });
+    t.deepEqual(updateResult.document, null);
 }));
 
-test('upsert non-existent',
-        hermeticTest(async (t, { dbClient }) => {
+test('upsert non-existent', hermeticTest(async (t, { dbClient }) => {
 
     let now = 123;
-    const dsc = new DataSlotCollection(dbClient.collection('foo'), {
+    const sboe = new SbOptEnt(dbClient.collection('foo'), {
         log: t.log.bind(t),
         nower: () => now
     });
 
     let ran = false;
     const updateResult = dateToMs(
-            await dsc.updateOneRecord({ foo: { $in: ['bar'] } }, v => {
+            await sboe.updateOneRecord({ foo: { $in: ['bar'] } }, v => {
         ran = true;
         t.deepEqual(v, {});
 
@@ -742,56 +748,49 @@ test('upsert non-existent',
 
     t.is(ran, true);
     t.truthy(updateResult.collectionOperationResult);
-    delete updateResult.collectionOperationResult;
 
-    t.deepEqual(updateResult, {
-        createdAt: 123,
-        updatedAt: 123,
-        value: {
-            _id: 'foo',
-            bar: 'bar',
-            plugh: 'plughval'
-        },
-        version: updateResult.version
+    t.deepEqual(updateResult.document, {
+        _id: 'foo',
+        bar: 'bar',
+        createdAt_sboe: 123,
+        plugh: 'plughval',
+        updatedAt_sboe: 123,
+        version_sboe: updateResult.document.version_sboe
     });
 }));
 
-test('upsert non-existent (no id)',
-        hermeticTest(async (t, { dbClient }) => {
+test('upsert non-existent (no id)', hermeticTest(async (t, { dbClient }) => {
 
     let now = 123;
-    const dsc = new DataSlotCollection(dbClient.collection('foo'), {
+    const sboe = new SbOptEnt(dbClient.collection('foo'), {
         log: t.log.bind(t),
         nower: () => now
     });
 
     let ran = false;
     const updateResult = dateToMs(
-            await dsc.updateOneRecord({ foo: { $in: ['bar'] } }, v => {
+            await sboe.updateOneRecord({ foo: { $in: ['bar'] } }, v => {
         ran = true;
         t.deepEqual(v, {});
 
         return {
             bar: 'bar',
             plugh: 'plughval'
-        }
+        };
     }, { upsert: true }));
 
     t.is(ran, true);
     t.truthy(updateResult.collectionOperationResult);
-    delete updateResult.collectionOperationResult;
 
-    t.truthy(updateResult.value._id);
+    t.truthy(updateResult.document._id);
 
-    t.deepEqual(updateResult, {
-        createdAt: 123,
-        updatedAt: 123,
-        value: {
-            _id: updateResult.value._id,
-            bar: 'bar',
-            plugh: 'plughval'
-        },
-        version: updateResult.version
+    t.deepEqual(updateResult.document, {
+        _id: updateResult.document._id,
+        bar: 'bar',
+        createdAt_sboe: 123,
+        plugh: 'plughval',
+        updatedAt_sboe: 123,
+        version_sboe: updateResult.document.version_sboe
     });
 }));
 
@@ -799,14 +798,14 @@ test('upsert non-existent ($eq set provided)',
         hermeticTest(async (t, { dbClient }) => {
 
     let now = 123;
-    const dsc = new DataSlotCollection(dbClient.collection('foo'), {
+    const sboe = new SbOptEnt(dbClient.collection('foo'), {
         log: t.log.bind(t),
         nower: () => now
     });
 
     let ran = false;
     const updateResult = dateToMs(
-            await dsc.updateOneRecord({
+            await sboe.updateOneRecord({
                 _id: 'foo',
                 bar: { $in: ['baz'] },
                 'waldo.plugh': { $eq: 'bazz' },
@@ -834,86 +833,87 @@ test('upsert non-existent ($eq set provided)',
 
     t.is(ran, true);
     t.truthy(updateResult.collectionOperationResult);
-    delete updateResult.collectionOperationResult;
 
-    t.truthy(updateResult.value._id);
+    t.truthy(updateResult.document._id);
 
-    t.deepEqual(updateResult, {
-        createdAt: 123,
-        updatedAt: 123,
-        value: {
-            _id: updateResult.value._id,
-            bar: 'bar',
-            plugh: 'plughval'
-        },
-        version: updateResult.version
+    t.deepEqual(updateResult.document, {
+        _id: updateResult.document._id,
+        bar: 'bar',
+        createdAt_sboe: 123,
+        plugh: 'plughval',
+        updatedAt_sboe: 123,
+        version_sboe: updateResult.document.version_sboe
     });
 }));
 
 test('basic insert and deleteOne', hermeticTest(async (t, { dbClient }) => {
-    const dsc = new DataSlotCollection(dbClient.collection('foo'), {
+    const sboe = new SbOptEnt(dbClient.collection('foo'), {
         log: t.log.bind(t),
         nower: () => 123
     });
 
-    await dsc.insertOneRecord({
+    await sboe.insertOneRecord({
         _id: 'foo',
         bar: 'barval'
     });
 
-    const deleteResult = await dsc.deleteOne({ _id: 'foo' });
+    const deleteResult = await sboe.deleteOne({ _id: 'foo' });
     t.truthy(deleteResult);
 
-    const findResult = await dsc.findOneRecord({ _id: 'foo' });
+    const findResult = await sboe.findOne({ _id: 'foo' });
 
-    t.deepEqual(findResult, { value: null });
+    t.deepEqual(findResult, null);
 }));
 
 test('deleteOne - confirm true', hermeticTest(async (t, { dbClient }) => {
-    const dsc = new DataSlotCollection(dbClient.collection('foo'), {
+    const sboe = new SbOptEnt(dbClient.collection('foo'), {
         log: t.log.bind(t),
         nower: () => 123
     });
 
-    await dsc.insertOneRecord({
+    await sboe.insertOneRecord({
         _id: 'foo',
         bar: 'barval'
     });
 
-    const deleteResult = await dsc.deleteOne(
+    const deleteResult = await sboe.deleteOne(
             { _id: 'foo' }, { confirmDelete: (() => true) });
     t.truthy(deleteResult);
 
-    const findResult = await dsc.findOneRecord({ _id: 'foo' });
+    const findResult = await sboe.findOne({ _id: 'foo' });
 
-    t.deepEqual(findResult, { value: null });
+    t.deepEqual(findResult, null);
 }));
 
 test('deleteOne - confirm false', hermeticTest(async (t, { dbClient }) => {
-    const dsc = new DataSlotCollection(dbClient.collection('foo'), {
+    const sboe = new SbOptEnt(dbClient.collection('foo'), {
         log: t.log.bind(t),
         nower: () => 123
     });
 
-    const insertResult = await dsc.insertOneRecord({
+    const insertResult = await sboe.insertOneRecord({
         _id: 'foo',
         bar: 'barval'
     });
 
-    const deleteResult = dateToMs(await dsc.deleteOneRecord(
+    const deleteResult = dateToMs(await sboe.deleteOneRecord(
             { _id: 'foo' }, { confirmDelete: (() => false) }));
 
     t.deepEqual(deleteResult, {
         collectionOperationResult: {
             acknowledged: true,
-            deletedCount: 0
+            deletedCount: 0,
+            modifiedCount: 0,
+            upsertedId: null,
+            upsertedCount: 0,
+            matchedCount: 0
         },
-        createdAt: 123,
-        updatedAt: 123,
-        value: {
+        document: {
             _id: 'foo',
-            bar: 'barval'
-        },
-        version: insertResult.version
+            bar: 'barval',
+            createdAt_sboe: 123,
+            updatedAt_sboe: 123,
+            version_sboe: insertResult.document.version_sboe
+        }
     });
 }));

@@ -1,9 +1,5 @@
 'use strict';
 
-// XXX: for one, `vdo run-tests` seems to be running an old image with a
-//      spurious console log? for another, do we need a separate `translateXYZ`
-//      to handle indexes? dollar signs get messy maybe
-
 const bs58 = require('bs58');
 const clone = require('clone');
 const crypto = require('crypto');
@@ -12,6 +8,8 @@ const lodash = require('lodash');
 const util = require('util');
 
 const { ObjectId } = require('mongodb');
+
+const pseudoFields = ['createdAt_sboe', 'updatedAt_sboe', 'version_sboe'];
 
 module.exports = class SbOptimisticEntityCollection {
     constructor(collection, {
@@ -36,35 +34,11 @@ module.exports = class SbOptimisticEntityCollection {
     }
 
     find(q, opts = {}) {
-        return this.findRecords(q, opts).map(({ value }) => value);
-    }
-
-    findRecords(q, opts = {}) {
-        return this.collection
-                .find(SbOptimisticEntityCollection.translateQuery(q), {})
-                .map(mongoDocToEntityRecord);
+        return this.collection.find(q, {});
     }
 
     async findOne(q, opts = {}) {
-        return (await this.findOneRecord(q, opts)).value;
-    }
-
-    async findOneRecord(q, opts = {}) {
-        const entityDoc =
-                await this.collection.findOne(
-                    SbOptimisticEntityCollection.translateQuery(q), opts);
-
-        let result;
-        if (entityDoc) {
-            result = mongoDocToEntityRecord(entityDoc);
-        }
-        else {
-            // I'd usually prefer throw an exception in this case, but this is a
-            // little more "Mongo-like".
-            result = { value: null };
-        }
-
-        return result;
+        return await this.collection.findOne(q, opts);
     }
 
     async insertOne(initialValue, opts = {}) {
@@ -75,23 +49,22 @@ module.exports = class SbOptimisticEntityCollection {
     async insertOneRecord(initialValue, opts = {}) {
         assertValidValue(initialValue, 'initialValue');
 
-        if (!('_id' in initialValue)) {
-            initialValue._id = new ObjectId();
-        }
-
         const now = new Date(this.nower());
         const version = bs58.encode(crypto.randomBytes(8));
 
-        const collectionOperationResult = await this.collection.insertOne(
-                toMongoDoc(initialValue, version, now, now), opts);
+        const document = {
+            _id: new ObjectId(),  // initialValue can overwrite this
+            ...initialValue,
 
-        return {
-            collectionOperationResult,
-            createdAt: now,
-            updatedAt: now,
-            value: initialValue,
-            version
+            createdAt_sboe: now,
+            updatedAt_sboe: now,
+            version_sboe: version
         };
+
+        const collectionOperationResult =
+                await this.collection.insertOne(document);
+
+        return { collectionOperationResult, document };
     }
 
     async updateOne(q, fn, opts) {
@@ -103,36 +76,50 @@ module.exports = class SbOptimisticEntityCollection {
         return await mutateOneRecord.bind(this)(
                 q, updateMutation.bind(this)(q, fn), opts)
     }
+}
 
-    static translateIndexKey(indexKeys) {
-        return mapKeys(indexKeys, (k, p) => {
-            let result;
+async function applyUpdateFnAndGuardProtectedFields(curDoc, updateFn) {
+    const protectedFields = Object.fromEntries(Object.entries(curDoc)
+            .filter(([k]) => k === '_id' || pseudoFields.includes(k))
+            .map(([k, v]) => [k, clone(v)]));
 
-            if (p.length > 0 || k === '_id' || k === '$**') {
-                result = k;
+    let newDoc = await updateFn(curDoc);
+
+    if (newDoc) {
+        const notSeen = new Set(Object.keys(protectedFields));
+
+        for (const [key, value] of Object.entries(newDoc)) {
+            if (key in protectedFields) {
+                notSeen.delete(key);
+
+                if (!deepEqual(value, protectedFields[key])) {
+                    const oldValStr =
+                            util.inspect(protectedFields[key]);
+                    const newIdStr = util.inspect(newDoc[key]);
+                    throw error('INVALID_UPDATE',
+                            `Cannot modify protected field ${key}. `
+                            + `${protectedFields[key]} != ${value}`);
+                }
             }
-            else {
-                result = `v_${k}`
+            else if (key.endsWith('_sboe')) {
+                throw error('INVALID_UPDATE',
+                        `Fields suffixed with "_sboe" are reserved for `
+                        + `sb-optimistic-entities. You tried to add `
+                        + `field "${key}".`);
             }
+        }
 
-            return result;
-        });
+        newDoc = {
+            ...newDoc,
+            ...protectedFields
+        };
     }
 
-    static translateQuery(q) {
-        return mapKeys(q, (k, p) => {
-            let result;
-
-            if (p.length > 0 || k === '_id' || k.startsWith('$')) {
-                result = k;
-            }
-            else {
-                result = `v_${k}`
-            }
-
-            return result;
-        });
+    if (newDoc) {
+        assertValidValue(newDoc);
     }
+
+    return newDoc;
 }
 
 function assertValidValue(v, desc) {
@@ -143,29 +130,12 @@ function assertValidValue(v, desc) {
 }
 
 function deleteMutation(confirmDelete = (() => true)) {
-    return async (curRecord, now, { upsert }) => {
-        let collectionOperationResult;
-
-        const confirmed = await confirmDelete(curRecord.value, curRecord);
-        if (confirmed) {
-            collectionOperationResult = await this.collection.deleteOne({
-                _id: curRecord.value._id,
-                version: curRecord.version
+    const deleteUpdate = updateMutation.bind(this)(
+            {}, async () => {
+                return (await confirmDelete()) ? null : undefined;
             });
-        }
-        else {
-            collectionOperationResult = {
-                acknowledged: true,
-                deletedCount: 0
-            };
-        }
 
-        return {
-            collectionOperationResult,
-            newValue: confirmed ? undefined : curRecord.value,
-            newVersion: confirmed ? undefined : curRecord.version
-        };
-    };
+    return (curRecord, now) => deleteUpdate(curRecord, now);
 }
 
 function error(code, msg, cause) {
@@ -174,13 +144,6 @@ function error(code, msg, cause) {
     e.code = code;
 
     return e;
-}
-
-function extractKeysWithPrefix(o, prefix) {
-    return Object.fromEntries(
-            Object.entries(o)
-                    .filter(([k]) => k.startsWith(prefix))
-                    .map(([k,v]) => [k.substring(prefix.length), v]));
 }
 
 function generateDefaultDocForUpsert(query) {
@@ -205,55 +168,6 @@ function generateDefaultDocForUpsert(query) {
     return result;
 }
 
-function mapKeys(o, fn, path = []) {
-    let result;
-
-    if (typeof o === 'object') {
-        if (o === null || o instanceof ObjectId) {
-            result = o;
-        }
-        else if (Array.isArray(o)) {
-            result = o.map((el, i) => {
-                path.push(i);
-                const result = mapKeys(el, fn);
-                path.pop();
-                return result;
-            });
-        }
-        else {
-            result = Object.fromEntries(Object.entries(o).map(
-                    ([key, val]) => {
-                        const newKey = fn(key, path);
-                        path.push(key);
-                        const newVal = mapKeys(val, fn, path);
-                        path.pop();
-                        return [newKey, newVal];
-                    }));
-        }
-    }
-    else {
-        result = o;
-    }
-
-    return result;
-}
-
-function mapTopLevelKeys(o, map) {
-    return Object.fromEntries(Object.entries(o).map(([k, v]) => [map(k), v]));
-}
-
-function mongoDocToEntityRecord(d) {
-    const value = extractKeysWithPrefix(d, 'v_');
-    value._id = d._id;
-
-    return {
-        createdAt: d.createdAt,
-        updatedAt: d.updatedAt,
-        value,
-        version: d.version
-    };
-}
-
 async function mutateOneRecord(q, fn, opts = {}) {
     let { expectedVersions, shouldRetry } = opts;
 
@@ -268,28 +182,25 @@ async function mutateOneRecord(q, fn, opts = {}) {
     expectedVersions =
             validateAndNormalizeExpectedVersions(expectedVersions);
 
-    let curRecord;
+    let curDoc;
     let collectionOperationResult;
-    let newValue;
-    let newVersion;
+    let newDoc;
     const now = new Date(this.nower());
     let tries = 0;
 
     do {
-        curRecord = await this.findOneRecord(q);
+        curDoc = await this.findOne(q);
 
         if (expectedVersions !== undefined
-                && !expectedVersions.includes(curRecord.version)) {
+                && !expectedVersions.includes(curDoc.version_sboe)) {
             throw error('VERSION_ASSERTION_FAILED', `Not an expected `
-                    + `version: "${curRecord.version}". Expected one of: `
+                    + `version: "${curDoc.version_sboe}". Expected one of: `
                     + `${JSON.stringify(expectedVersions)}`);
         }
 
         tries++;
 
-        ({ collectionOperationResult, newValue, newVersion } =
-                await fn(curRecord, now, opts));
-
+        ([ collectionOperationResult, newDoc ] = await fn(curDoc, now, opts));
     } while (!collectionOperationResult && await shouldRetry(tries));
 
     if (!collectionOperationResult) {
@@ -300,49 +211,56 @@ async function mutateOneRecord(q, fn, opts = {}) {
 
     return {
         collectionOperationResult,
-        createdAt: newValue ? (curRecord.createdAt || now) : undefined,
-        updatedAt: newValue ? now : undefined,
-        value: newValue,
-        version: newVersion
+        document: newDoc || null
     };
 }
 
-function toMongoDoc(value, version, createdAt, now) {
-    const valueWithoutId = { ...value };
-    delete valueWithoutId._id;
-
-    const result = {
-        createdAt,
-        updatedAt: now,
-        version,
-
-        ...mapTopLevelKeys(valueWithoutId, k => `v_${k}`)
-    };
-
-    if (value._id) {
-        result._id = value._id;
-    }
-
-    return result;
+function extendIfExists(o, fn) {
+    return o ? { ...o, ...fn(o) } : o;
 }
 
-function updateMutation(q, fn) {
-    return async (curRecord, now, { upsert }) => {
+function updateMutation(q, updateFn) {
+    return async (curDoc, now, { upsert } = {}) => {
         let collectionOperationResult;
-        let newValue;
-        let newVersion;
 
-        let op;
-        if (curRecord.value === null) {
-            if (upsert) {
-                newValue = await fn(
-                        generateDefaultDocForUpsert(q), curRecord);
+        // No curDoc and we're upserting? Apply updateFn to default doc, and
+        // ignore `null`, which would be the instruction to delete--but there's
+        // no document yet so "delete" (null) and "leave alone" (undefined) are
+        // the same.
+        // No curDoc and no upsert? Undefined (i.e., leave alone)
+        // curDoc? Apply updateFn and respect new document, or `null` for
+        // or `undefined` for "leave alone"
+        const newDoc = extendIfExists(
+                curDoc === null ?
+                        upsert ? (await applyUpdateFnAndGuardProtectedFields(
+                                generateDefaultDocForUpsert(q), updateFn)
+                                || undefined)
+                        : undefined
+                : await applyUpdateFnAndGuardProtectedFields(curDoc, updateFn),
+                ({ _id: maybeId }) => ({
+                    _id: maybeId || new ObjectId(),
+                    createdAt_sboe: curDoc?.createdAt_sboe || now,
+                    updatedAt_sboe: now,
+                    version_sboe: bs58.encode(crypto.randomBytes(8))
+                }));
 
-                if (!('_id' in newValue)) {
-                    newValue._id = new ObjectId();
+        const op = newDoc === null
+                ? async () => {
+                    let result = this.collection.deleteOne({
+                        _id: curDoc._id,
+                        version_sboe: curDoc.version_sboe
+                    });
+
+                    if (result.matchedCount === 0) {
+                        // Someone has updated or deleted out from under us. We
+                        // should maybe try again...
+                        result = undefined;
+                    }
+
+                    return result;
                 }
-
-                op = async doc => {
+                : curDoc === null
+                ? async doc => {
                     let result;
 
                     try {
@@ -359,65 +277,40 @@ function updateMutation(q, fn) {
                     }
 
                     return result;
-                };
-            }
-        }
-        else {
-            const oldId = clone(curRecord.value._id);
-            newValue = await fn(curRecord.value, curRecord);
-
-            if (newValue && !deepEqual(newValue._id, oldId)) {
-                const oldIdStr = util.inspect(oldId);
-                const newIdStr = util.inspect(newValue._id);
-                throw error('INVALID_UPDATE',
-                        `Cannot modify _id. ${newIdStr} != ${oldIdStr}`);
-            }
-
-            op = async doc => {
-                let result;
-
-                result = await this.collection.replaceOne({
-                    _id: curRecord.value._id,
-                    version: curRecord.version
-                }, doc);
-
-                if (result.matchedCount === 0) {
-                    // Someone has updated or deleted out from under us. We
-                    // should maybe try again...
-                    result = undefined;
                 }
+                : async doc => {
+                    let result = await this.collection.replaceOne({
+                        _id: curDoc?._id,
+                        version_sboe: curDoc?.version_sboe
+                    }, doc);
 
-                return result;
-            };
-        }
+                    if (result.matchedCount === 0) {
+                        // Someone has updated or deleted out from under us. We
+                        // should maybe try again...
+                        result = undefined;
+                    }
 
-        if (newValue) {
-            assertValidValue(newValue, 'Result of update function');
+                    return result;
+                };
 
-            newVersion = bs58.encode(crypto.randomBytes(8));
-
-            collectionOperationResult = await op(toMongoDoc(
-                    newValue,
-                    newVersion,
-                    curRecord.createdAt || now,
-                    now));
-        }
-        else {
+        if (newDoc === undefined) {
             collectionOperationResult = {
                 acknowledged: true,
+                deletedCount: 0,
                 modifiedCount: 0,
                 upsertedId: null,
                 upsertedCount: 0,
                 matchedCount: 0
             };
         }
+        else {
+            collectionOperationResult = await op(newDoc);
+        }
 
-        return {
+        return [
             collectionOperationResult,
-            newValue: newValue ?
-                    newValue : undefined, // Regularize falsey to undefined
-            newVersion: newValue ? newVersion : curRecord.version
-        };
+            newDoc === undefined ? curDoc : newDoc
+        ];
     };
 }
 
