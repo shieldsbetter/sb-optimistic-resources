@@ -131,8 +131,8 @@ function assertValidValue(v, desc) {
 
 function deleteMutation(confirmDelete = (() => true)) {
     const deleteUpdate = updateMutation.bind(this)(
-            {}, async () => {
-                return (await confirmDelete()) ? null : undefined;
+            {}, async d => {
+                return (await confirmDelete(d)) ? null : undefined;
             });
 
     return (curRecord, now) => deleteUpdate(curRecord, now);

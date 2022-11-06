@@ -917,3 +917,25 @@ test('deleteOne - confirm false', hermeticTest(async (t, { dbClient }) => {
         }
     });
 }));
+
+test('deleteOne - use doc data', hermeticTest(async (t, { dbClient }) => {
+    const sboe = new SbOptEnt(dbClient.collection('foo'), {
+        log: t.log.bind(t),
+        nower: () => 123
+    });
+
+    await sboe.insertOneRecord({
+        _id: 'foo',
+        shouldDelete: true
+    });
+
+    const deleteResult = await sboe.deleteOne(
+            { _id: 'foo' }, {
+                confirmDelete: (({ shouldDelete } = {}) => shouldDelete)
+            });
+    t.truthy(deleteResult);
+
+    const findResult = await sboe.findOne({ _id: 'foo' });
+
+    t.deepEqual(findResult, null);
+}));
