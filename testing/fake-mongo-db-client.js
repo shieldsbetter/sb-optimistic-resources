@@ -50,8 +50,8 @@ function fakeMongoCollectionClient(docs, log) {
             return {};
         },
 
-        find(q) {
-            const matches = docs.filter(sift(q));
+        find(q, { limit = 100 } = {}) {
+            const matches = docs.filter(sift(q)).slice(0, limit);
 
             return fakeFindCursor(matches);
         },

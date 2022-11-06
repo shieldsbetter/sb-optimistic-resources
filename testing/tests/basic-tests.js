@@ -232,6 +232,22 @@ test('find many', hermeticTest(async (t, { dbClient }) => {
     ]);
 }));
 
+test('find many with opts', hermeticTest(async (t, { dbClient }) => {
+    const sboe = new SbOptEnt(dbClient.collection('foo'), {
+        log: t.log.bind(t),
+        nower: () => 123
+    });
+
+    dateToMs(await sboe.insertOneRecord({}));
+    dateToMs(await sboe.insertOneRecord({}));
+    dateToMs(await sboe.insertOneRecord({}));
+
+    const findCursor = sboe.find({}, { limit: 2 });
+    const findDocs = (await findCursor.toArray()).map(dateToMs);
+
+    t.deepEqual(findDocs.length, 2);
+}));
+
 test('assert wrong version', hermeticTest(async (t, { dbClient }) => {
     const sboe = new SbOptEnt(dbClient.collection('foo'), {
         log: t.log.bind(t)
