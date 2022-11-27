@@ -7,7 +7,7 @@ const deepEqual = require('deep-equal');
 const lodash = require('lodash');
 const util = require('util');
 
-const { ObjectId } = require('mongodb');
+const { EJSON, ObjectId } = require('bson');
 
 const pseudoFields = ['createdAt_sboe', 'updatedAt_sboe', 'version_sboe'];
 
@@ -93,7 +93,11 @@ async function applyUpdateFnAndGuardProtectedFields(curDoc, updateFn) {
             if (key in protectedFields) {
                 notSeen.delete(key);
 
-                if (!deepEqual(value, protectedFields[key])) {
+                const normOldVal =
+                        JSON.parse(EJSON.stringify(protectedFields[key]));
+                const normNewVal = JSON.parse(EJSON.stringify(newDoc[key]));
+
+                if (!deepEqual(normOldVal, normNewVal)) {
                     const oldValStr =
                             util.inspect(protectedFields[key]);
                     const newIdStr = util.inspect(newDoc[key]);
@@ -101,6 +105,8 @@ async function applyUpdateFnAndGuardProtectedFields(curDoc, updateFn) {
                             `Cannot modify protected field ${key}. `
                             + `${protectedFields[key]} != ${value}`);
                 }
+
+                newDoc[key] = protectedFields[key];
             }
             else if (key.endsWith('_sboe')) {
                 throw error('INVALID_UPDATE',

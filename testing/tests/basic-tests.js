@@ -1,8 +1,9 @@
 'use strict';
 
-const SbOptEnt = require('../../index');
+const bsonObjectId = require('bson-objectid');
 const dateToMs = require('../dates-to-ms');
 const hermeticTest = require('../hermetic-test');
+const SbOptEnt = require('../../index');
 const test = require('ava');
 const updateWithInterleaving = require('../update-with-interleaving');
 
@@ -164,6 +165,28 @@ test('basic insert, update, and findOne - mongo style',
         updatedAt_sboe: 124,
         version_sboe: findResult.version_sboe
     });
+}));
+
+test('different ObjectId implementation ok',
+        hermeticTest(async (t, { dbClient }) => {
+
+    const sboe = new SbOptEnt(dbClient.collection('foo'), {
+        log: t.log.bind(t)
+    });
+
+    const insertResult = await sboe.insertOne({
+        foo: 'fooval1'
+    });
+    const updateResult = await sboe.updateOneRecord(
+            { _id: insertResult.insertedId },
+            v => ({
+                _id: bsonObjectId(v._id.toHexString()),
+                foo: 'fooval2'
+            }));
+    const findResult = await sboe.findOne({ _id: insertResult.insertedId });
+
+    t.is(updateResult.document.foo, 'fooval2');
+    t.is(findResult.foo, 'fooval2');
 }));
 
 test('find by something other than _id',
