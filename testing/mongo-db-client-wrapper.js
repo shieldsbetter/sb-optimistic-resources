@@ -5,36 +5,36 @@ class CollectionWrapper {
         this.base = base;
     }
 
-    deleteMany(q) {
-        return this.base.deleteMany(q);
+    deleteMany(...args) {
+        return this.base.deleteMany(...args);
     }
 
-    deleteOne(q) {
-        return this.base.deleteOne(q);
+    deleteOne(...args) {
+        return this.base.deleteOne(...args);
     }
 
-    find(q) {
-        return this.base.find(q);
+    find(...args) {
+        return this.base.find(...args);
     }
 
-    async findOne(q) {
-        return await this.base.findOne(q);
+    async findOne(...args) {
+        return await this.base.findOne(...args);
     }
 
-    async insertOne(d) {
+    async insertOne(...args) {
         if (this.insertOneError) {
             throw this.insertOneError;
         }
 
-        return await this.base.insertOne(d);
+        return await this.base.insertOne(...args);
     }
 
-    async replaceOne(q, d, opts = {}) {
+    async replaceOne(...args) {
         if (this.replaceOneError) {
             throw this.replaceOneError;
         }
 
-        return await this.base.replaceOne(q, d, opts);
+        return await this.base.replaceOne(...args);
     }
 }
 

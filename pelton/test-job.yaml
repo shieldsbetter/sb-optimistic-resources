@@ -13,6 +13,7 @@ spec:
       containers:
       - name: run-tests-ctnr-${MONGO_IMAGE_TAG_DNS}
         image: $PELTON_IMAGE_TAG:latest
+        args: $PELTON_START_ARGS
         env:
         - name: MONGO_CONNECT_STRING
           value: "mongodb://mongo-svc-${MONGO_IMAGE_TAG_DNS}.pltn-sboptent-test-$PELTON_ISO_KEY:27017"
