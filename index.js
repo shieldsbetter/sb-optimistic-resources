@@ -34,7 +34,6 @@ module.exports = class SbOptimisticEntityCollection {
     }
 
     find(q, opts = {}) {
-        console.log('opts', opts);
         return this.collection.find(q, opts);
     }
 
