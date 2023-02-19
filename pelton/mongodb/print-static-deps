@@ -11,6 +11,8 @@ function supportedVersion() {
     )
 }
 
-for image in $(cat supported-mongo-images); do
+eval $(pelton variables ../..)
+
+for image in $(echo "$SUPPORTED_MONGO_VERSIONS" | tr ',' '\n'); do
     supportedVersion $image
 done

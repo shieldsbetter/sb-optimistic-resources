@@ -1,0 +1,10 @@
+dnsName: 'mongodb'
+environments: {
+    default: {
+        peltonDependencies: []
+    },
+    test: {
+        printTerminalDependencies: 'bash print-static-deps',
+        peltonDependencies: []
+    }
+}

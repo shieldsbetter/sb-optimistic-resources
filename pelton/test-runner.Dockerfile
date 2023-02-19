@@ -6,5 +6,5 @@ COPY package*.json .
 RUN npm install && npm ci
 
 COPY . .
-ENTRYPOINT ["npx", "ava"]
-CMD []
+ENTRYPOINT []
+CMD ["sh", "-c", "${RUN_TESTS}"]

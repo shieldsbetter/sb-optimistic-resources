@@ -1,7 +1,7 @@
 apiVersion: batch/v1
 kind: Job
 metadata:
-  name: run-tests-job-${MONGO_IMAGE_TAG_DNS}
+  name: run-tests-job-${PELTON_RUN}
 spec:
   ttlSecondsAfterFinished: 3600
   template:
@@ -11,9 +11,6 @@ spec:
     spec:
       restartPolicy: Never
       containers:
-      - name: run-tests-ctnr-${MONGO_IMAGE_TAG_DNS}
-        image: $PELTON_IMAGE_TAG:latest
-        args: $PELTON_START_ARGS
-        env:
-        - name: MONGO_CONNECT_STRING
-          value: "mongodb://mongo-svc-${MONGO_IMAGE_TAG_DNS}.pltn-sboptent-test-$PELTON_ISO_KEY:27017"
+      - name: run-tests-ctnr-${PELTON_RUN}
+        image: ${PELTON_BRES}
+        args: $PELTON_TARGET_ARGS
