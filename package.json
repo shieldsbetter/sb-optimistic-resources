@@ -1,6 +1,6 @@
 {
   "name": "@shieldsbetter/sb-optimistic-entities",
-  "version": "0.0.12",
+  "version": "0.0.13",
   "description": "Optimistic locking library for MongoDb.",
   "main": "index.js",
   "scripts": {
