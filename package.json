@@ -1,6 +1,6 @@
 {
   "name": "@shieldsbetter/sb-optimistic-resources",
-  "version": "0.0.13",
+  "version": "0.0.14",
   "description": "Optimistic locking library for MongoDb.",
   "main": "index.js",
   "scripts": {
