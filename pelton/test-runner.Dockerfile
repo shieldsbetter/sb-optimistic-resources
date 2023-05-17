@@ -1,9 +1,11 @@
 FROM node:16.17
 COPY package*.json .
 
-# If we're included as a pelton dependency, we likely won't have access to
-# package-lock.json (which isn't published to npm), so we `install` first.
-RUN npm install && npm ci
+# If we're installed as a dependency via npm, we won't have access to
+# package-lock.json, so we'll need to generate it.
+RUN test -f package-lock.json || npm install
+
+RUN npm ci
 
 COPY . .
 ENTRYPOINT []

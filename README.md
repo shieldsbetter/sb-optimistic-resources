@@ -1,4 +1,4 @@
-# sb-optimistic-entities
+# sb-optimistic-resources
 
 Optimistic locking library for MongoDb. Perform updates with plain Javascript.
 
@@ -6,14 +6,15 @@ Optimistic locking library for MongoDb. Perform updates with plain Javascript.
 
 ```javascript
 const assert = require('assert');
-const OptEntCollection = require('@shieldsbetter/sb-optimistic-entities');
+const OptResourceCollection = require('@shieldsbetter/sb-optimistic-resources');
 const { MongoClient } = require('mongodb');
 
 async main() {
     const dbClient = await MongoClient
             .connect(process.env.MONGOD_URI)
             .then(mc => mc.db('TestDb'));
-    const petsCollection = new OptEntCollection(dbClient.collection('Pets'));
+    const petsCollection =
+            new OptResourceCollection(dbClient.collection('Pets'));
 
     await petsCollection.insertOne({
         _id: 'Ellie',
@@ -28,8 +29,8 @@ async main() {
         return ellie;
     });
 
-    const entity = await petsCollection.findOne({ _id: 'Ellie' });
-    assert.deepEqual(entity, {
+    const resource = await petsCollection.findOne({ _id: 'Ellie' });
+    assert.deepEqual(resource, {
         _id: 'Ellie',
         breed: 'Azawakh',
         age: 7;

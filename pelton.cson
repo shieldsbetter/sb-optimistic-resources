@@ -1,29 +1,27 @@
-dnsName: 'sboptent'
+dnsName: 'sboptrsrc'
 variables: {
     SUPPORTED_MONGO_VERSIONS: '5.0-focal,4.4-focal,4.2-bionic'
 }
 
 environments: {
-    default: {
-        peltonDependencies: []
-    },
     test: {
-        buildCommand: '''
+        build: '''
+            wait-for-registry
             bash pelton/print-test-image.sh | docker build \
                     -f - \
-                    -t $PELTON_DOCKER_REGISTRY/sboptent \
+                    -t $PELTON_DOCKER_REGISTRY/sboptrsrc \
                     . >&2
-            docker push $PELTON_DOCKER_REGISTRY/sboptent >&2
+            docker push $PELTON_DOCKER_REGISTRY/sboptrsrc >&2
             docker inspect --format='{{index .RepoDigests 0}}' \
-                    $PELTON_DOCKER_REGISTRY/sboptent:latest
+                    $PELTON_DOCKER_REGISTRY/sboptrsrc:latest
         ''',
-        printTerminalDependencies: 'cat pelton/test-job.yaml | envsubst',
-        peltonDependencies: [
+        printProjectManifest: 'cat pelton/test-job.yaml | envsubst',
+        dependencies: [
             {
                 printProjectDirectory: 'echo pelton/mongodb',
                 environment: 'test'
             }
         ],
-        podSelector: 'test-job=sb-optimistic-entities'
+        podSelector: 'test-job=sb-optimistic-resources'
     }
 }

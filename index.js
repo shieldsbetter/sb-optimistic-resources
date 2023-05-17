@@ -9,9 +9,9 @@ const util = require('util');
 
 const { EJSON, ObjectId } = require('bson');
 
-const pseudoFields = ['createdAt_sboe', 'updatedAt_sboe', 'version_sboe'];
+const pseudoFields = ['createdAt_sbor', 'updatedAt_sbor', 'version_sbor'];
 
-module.exports = class SbOptimisticEntityCollection {
+module.exports = class SbOptimisticResourceCollection {
     constructor(collection, {
         log = console.log.bind(console),
         nower = Date.now,
@@ -56,9 +56,9 @@ module.exports = class SbOptimisticEntityCollection {
             _id: new ObjectId(),  // initialValue can overwrite this
             ...initialValue,
 
-            createdAt_sboe: now,
-            updatedAt_sboe: now,
-            version_sboe: version
+            createdAt_sbor: now,
+            updatedAt_sbor: now,
+            version_sbor: version
         };
 
         const collectionOperationResult =
@@ -107,10 +107,10 @@ async function applyUpdateFnAndGuardProtectedFields(curDoc, updateFn) {
 
                 newDoc[key] = protectedFields[key];
             }
-            else if (key.endsWith('_sboe')) {
+            else if (key.endsWith('_sbor')) {
                 throw error('INVALID_UPDATE',
-                        `Fields suffixed with "_sboe" are reserved for `
-                        + `sb-optimistic-entities. You tried to add `
+                        `Fields suffixed with "_sbor" are reserved for `
+                        + `sb-optimistic-resources. You tried to add `
                         + `field "${key}".`);
             }
         }
@@ -198,9 +198,9 @@ async function mutateOneRecord(q, fn, opts = {}) {
         curDoc = await this.findOne(q);
 
         if (expectedVersions !== undefined
-                && !expectedVersions.includes(curDoc.version_sboe)) {
+                && !expectedVersions.includes(curDoc.version_sbor)) {
             throw error('VERSION_ASSERTION_FAILED', `Not an expected `
-                    + `version: "${curDoc.version_sboe}". Expected one of: `
+                    + `version: "${curDoc.version_sbor}". Expected one of: `
                     + `${JSON.stringify(expectedVersions)}`);
         }
 
@@ -245,16 +245,16 @@ function updateMutation(q, updateFn) {
                 : await applyUpdateFnAndGuardProtectedFields(curDoc, updateFn),
                 ({ _id: maybeId }) => ({
                     _id: maybeId || new ObjectId(),
-                    createdAt_sboe: curDoc?.createdAt_sboe || now,
-                    updatedAt_sboe: now,
-                    version_sboe: bs58.encode(crypto.randomBytes(8))
+                    createdAt_sbor: curDoc?.createdAt_sbor || now,
+                    updatedAt_sbor: now,
+                    version_sbor: bs58.encode(crypto.randomBytes(8))
                 }));
 
         const op = newDoc === null
                 ? async () => {
                     let result = this.collection.deleteOne({
                         _id: curDoc._id,
-                        version_sboe: curDoc.version_sboe
+                        version_sbor: curDoc.version_sbor
                     });
 
                     if (result.matchedCount === 0) {
@@ -287,7 +287,7 @@ function updateMutation(q, updateFn) {
                 : async doc => {
                     let result = await this.collection.replaceOne({
                         _id: curDoc?._id,
-                        version_sboe: curDoc?.version_sboe
+                        version_sbor: curDoc?.version_sbor
                     }, doc);
 
                     if (result.matchedCount === 0) {

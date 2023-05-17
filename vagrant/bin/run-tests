@@ -1,13 +1,4 @@
 #!/bin/bash
 
-build-test-image
-
-TEST_ID=$(echo $RANDOM | md5sum | head -c8)
-microk8s kubectl create namespace "$TEST_ID"
-
-try-run-tests "$TEST_ID"
-
-set -e
-echo "Deleting test resources..."
-microk8s kubectl delete namespace "$TEST_ID" >/dev/null
-echo "...done!"
+cd /vagrant
+pelton start --environment test

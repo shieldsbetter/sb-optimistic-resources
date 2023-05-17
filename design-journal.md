@@ -1,5 +1,13 @@
 # Design Journal
 
+## Oops!
+
+### The problem
+
+Very embarassingly wrote "entity" when I meant "resource" early in the process
+of creating this library and then carried that mistake forward with me for a
+year. :joy: Renaming everywhere!
+
 ## Metadata
 
 ### The problem
@@ -35,7 +43,7 @@ The downsides are:
 
 1) If the client adds `{_id: "x", foo: "bar"}` they now get
 back `{_id: "x", foo: "bar", ...some other stuff we added...}`
-2) Field clashes are not a possibility and must be addressed.
+2) Field clashes are now a possibility and must be addressed.
 
 While Number 1 is less than ideal, it's easily explained and mirrors what the
 client is already accustomed to with MongoDb (after all, had they added
@@ -51,7 +59,7 @@ We could just add our `createdBy` alongside the client's `foo`. The biggest
 problem here is future-proofing. If we want to add a field in the future, it
 becomes a breaking change.
 
-#### Option 1: Explicit client namespace
+#### Option 2: Explicit client namespace
 
 We could confine the user to editing a subtree rooted in some top level field.
 

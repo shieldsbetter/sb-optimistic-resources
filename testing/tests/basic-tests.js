@@ -9,12 +9,12 @@ const updateWithInterleaving = require('../update-with-interleaving');
 
 test('basic insert and findOne - with id',
         hermeticTest(async (t, { dbClient }) => {
-    const sboe = new SbOptEnt(dbClient.collection('foo'), {
+    const sbor = new SbOptEnt(dbClient.collection('foo'), {
         log: t.log.bind(t),
         nower: () => 123
     });
 
-    const insertResult = dateToMs(await sboe.insertOneRecord({
+    const insertResult = dateToMs(await sbor.insertOneRecord({
         _id: 'foo',
         bar: 'barval'
     }));
@@ -24,30 +24,30 @@ test('basic insert and findOne - with id',
     t.deepEqual(insertResult.document, {
         _id: 'foo',
         bar: 'barval',
-        createdAt_sboe: 123,
-        updatedAt_sboe: 123,
-        version_sboe: insertResult.document.version_sboe
+        createdAt_sbor: 123,
+        updatedAt_sbor: 123,
+        version_sbor: insertResult.document.version_sbor
     });
 
-    const findResult = dateToMs(await sboe.findOne({ _id: 'foo' }));
+    const findResult = dateToMs(await sbor.findOne({ _id: 'foo' }));
 
     t.deepEqual(findResult, {
         _id: 'foo',
         bar: 'barval',
-        createdAt_sboe: 123,
-        updatedAt_sboe: 123,
-        version_sboe: insertResult.document.version_sboe
+        createdAt_sbor: 123,
+        updatedAt_sbor: 123,
+        version_sbor: insertResult.document.version_sbor
     });
 }));
 
 test('basic insert and findOne - no id',
         hermeticTest(async (t, { dbClient }) => {
-    const sboe = new SbOptEnt(dbClient.collection('foo'), {
+    const sbor = new SbOptEnt(dbClient.collection('foo'), {
         log: t.log.bind(t),
         nower: () => 123
     });
 
-    const insertResult = dateToMs(await sboe.insertOneRecord({
+    const insertResult = dateToMs(await sbor.insertOneRecord({
         bar: 'barval'
     }));
 
@@ -56,20 +56,20 @@ test('basic insert and findOne - no id',
     t.deepEqual(insertResult.document, {
         _id: insertResult.document._id,
         bar: 'barval',
-        createdAt_sboe: 123,
-        updatedAt_sboe: 123,
-        version_sboe: insertResult.document.version_sboe
+        createdAt_sbor: 123,
+        updatedAt_sbor: 123,
+        version_sbor: insertResult.document.version_sbor
     });
 
     const findResult =
-            dateToMs(await sboe.findOne({ _id: insertResult.document._id }));
+            dateToMs(await sbor.findOne({ _id: insertResult.document._id }));
 
     t.deepEqual(findResult, {
         _id: insertResult.document._id,
         bar: 'barval',
-        createdAt_sboe: 123,
-        updatedAt_sboe: 123,
-        version_sboe: insertResult.document.version_sboe
+        createdAt_sbor: 123,
+        updatedAt_sbor: 123,
+        version_sbor: insertResult.document.version_sbor
     });
 }));
 
@@ -77,12 +77,12 @@ test('basic insert, update, and findOne',
         hermeticTest(async (t, { dbClient }) => {
 
     let now = 123;
-    const sboe = new SbOptEnt(dbClient.collection('foo'), {
+    const sbor = new SbOptEnt(dbClient.collection('foo'), {
         log: t.log.bind(t),
         nower: () => now
     });
 
-    const insertResult = dateToMs(await sboe.insertOneRecord({
+    const insertResult = dateToMs(await sbor.insertOneRecord({
         _id: 'foo',
         bar: 'barval',
         bazz: 'bazzval'
@@ -90,7 +90,7 @@ test('basic insert, update, and findOne',
 
     now = 124;
     const updateResult =
-            dateToMs(await sboe.updateOneRecord({ _id: 'foo' }, v => {
+            dateToMs(await sbor.updateOneRecord({ _id: 'foo' }, v => {
 
         v.plugh = 'plughval';
         delete v.bazz;
@@ -103,24 +103,24 @@ test('basic insert, update, and findOne',
     t.deepEqual(updateResult.document, {
         _id: 'foo',
         bar: 'barval',
-        createdAt_sboe: 123,
+        createdAt_sbor: 123,
         plugh: 'plughval',
-        updatedAt_sboe: 124,
-        version_sboe: updateResult.document.version_sboe
+        updatedAt_sbor: 124,
+        version_sbor: updateResult.document.version_sbor
     });
 
-    t.not(updateResult.document.version_sboe,
-            insertResult.document.version_sboe);
+    t.not(updateResult.document.version_sbor,
+            insertResult.document.version_sbor);
 
-    const findResult = dateToMs(await sboe.findOne({ _id: 'foo' }));
+    const findResult = dateToMs(await sbor.findOne({ _id: 'foo' }));
 
     t.deepEqual(findResult, {
         _id: 'foo',
         bar: 'barval',
-        createdAt_sboe: 123,
+        createdAt_sbor: 123,
         plugh: 'plughval',
-        updatedAt_sboe: 124,
-        version_sboe: updateResult.document.version_sboe
+        updatedAt_sbor: 124,
+        version_sbor: updateResult.document.version_sbor
     });
 }));
 
@@ -128,13 +128,13 @@ test('basic insert, update, and findOne - mongo style',
         hermeticTest(async (t, { dbClient }) => {
 
     let now = 123;
-    const sboe = new SbOptEnt(dbClient.collection('foo'), {
+    const sbor = new SbOptEnt(dbClient.collection('foo'), {
         generateId: () => 'id1',
         log: t.log.bind(t),
         nower: () => now
     });
 
-    const insertResult = dateToMs(await sboe.insertOne({
+    const insertResult = dateToMs(await sbor.insertOne({
         _id: 'foo',
         bar: 'barval',
         bazz: 'bazzval'
@@ -144,7 +144,7 @@ test('basic insert, update, and findOne - mongo style',
     t.falsy(insertResult.document);
 
     now = 124;
-    const updateResult = dateToMs(await sboe.updateOne({ _id: 'foo' }, v => {
+    const updateResult = dateToMs(await sbor.updateOne({ _id: 'foo' }, v => {
 
         v.plugh = 'plughval';
         delete v.bazz;
@@ -155,35 +155,35 @@ test('basic insert, update, and findOne - mongo style',
     t.truthy(updateResult);
     t.falsy(updateResult.document);
 
-    const findResult = dateToMs(await sboe.findOne({ _id: 'foo' }));
+    const findResult = dateToMs(await sbor.findOne({ _id: 'foo' }));
 
     t.deepEqual(findResult, {
         _id: 'foo',
         bar: 'barval',
-        createdAt_sboe: 123,
+        createdAt_sbor: 123,
         plugh: 'plughval',
-        updatedAt_sboe: 124,
-        version_sboe: findResult.version_sboe
+        updatedAt_sbor: 124,
+        version_sbor: findResult.version_sbor
     });
 }));
 
 test('different ObjectId implementation ok',
         hermeticTest(async (t, { dbClient }) => {
 
-    const sboe = new SbOptEnt(dbClient.collection('foo'), {
+    const sbor = new SbOptEnt(dbClient.collection('foo'), {
         log: t.log.bind(t)
     });
 
-    const insertResult = await sboe.insertOne({
+    const insertResult = await sbor.insertOne({
         foo: 'fooval1'
     });
-    const updateResult = await sboe.updateOneRecord(
+    const updateResult = await sbor.updateOneRecord(
             { _id: insertResult.insertedId },
             v => ({
                 _id: bsonObjectId(v._id.toHexString()),
                 foo: 'fooval2'
             }));
-    const findResult = await sboe.findOne({ _id: insertResult.insertedId });
+    const findResult = await sbor.findOne({ _id: insertResult.insertedId });
 
     t.is(updateResult.document.foo, 'fooval2');
     t.is(findResult.foo, 'fooval2');
@@ -191,99 +191,99 @@ test('different ObjectId implementation ok',
 
 test('find by something other than _id',
         hermeticTest(async (t, { dbClient }) => {
-    const sboe = new SbOptEnt(dbClient.collection('foo'), {
+    const sbor = new SbOptEnt(dbClient.collection('foo'), {
         log: t.log.bind(t),
         nower: () => 123
     });
 
-    const insertResult = dateToMs(await sboe.insertOneRecord({
+    const insertResult = dateToMs(await sbor.insertOneRecord({
         _id: 'foo',
         bar: 'barval'
     }));
 
     t.truthy(insertResult.collectionOperationResult);
 
-    const findResult = dateToMs(await sboe.findOne({ bar: { $exists: true } }));
+    const findResult = dateToMs(await sbor.findOne({ bar: { $exists: true } }));
 
     t.deepEqual(findResult, {
         _id: 'foo',
         bar: 'barval',
-        createdAt_sboe: 123,
-        updatedAt_sboe: 123,
-        version_sboe: insertResult.document.version_sboe
+        createdAt_sbor: 123,
+        updatedAt_sbor: 123,
+        version_sbor: insertResult.document.version_sbor
     });
 }));
 
 test('find many', hermeticTest(async (t, { dbClient }) => {
-    const sboe = new SbOptEnt(dbClient.collection('foo'), {
+    const sbor = new SbOptEnt(dbClient.collection('foo'), {
         log: t.log.bind(t),
         nower: () => 123
     });
 
-    const insertResult1 = dateToMs(await sboe.insertOneRecord({
+    const insertResult1 = dateToMs(await sbor.insertOneRecord({
         _id: 'foo',
         toBeReturned: true
     }));
 
-    const insertResult2 = dateToMs(await sboe.insertOneRecord({
+    const insertResult2 = dateToMs(await sbor.insertOneRecord({
         _id: 'bar'
     }));
 
-    const insertResult3 = dateToMs(await sboe.insertOneRecord({
+    const insertResult3 = dateToMs(await sbor.insertOneRecord({
         _id: 'bazz',
         toBeReturned: true
     }));
 
-    const findCursor = sboe.find({ toBeReturned: true });
+    const findCursor = sbor.find({ toBeReturned: true });
     const findDocs = (await findCursor.toArray()).map(dateToMs);
 
     t.deepEqual(findDocs, [
         {
             _id: 'foo',
-            createdAt_sboe: 123,
+            createdAt_sbor: 123,
             toBeReturned: true,
-            updatedAt_sboe: 123,
-            version_sboe: insertResult1.document.version_sboe
+            updatedAt_sbor: 123,
+            version_sbor: insertResult1.document.version_sbor
         },
         {
             _id: 'bazz',
-            createdAt_sboe: 123,
+            createdAt_sbor: 123,
             toBeReturned: true,
-            updatedAt_sboe: 123,
-            version_sboe: insertResult3.document.version_sboe
+            updatedAt_sbor: 123,
+            version_sbor: insertResult3.document.version_sbor
         }
     ]);
 }));
 
 test('find many with opts', hermeticTest(async (t, { dbClient }) => {
-    const sboe = new SbOptEnt(dbClient.collection('foo'), {
+    const sbor = new SbOptEnt(dbClient.collection('foo'), {
         log: t.log.bind(t),
         nower: () => 123
     });
 
-    dateToMs(await sboe.insertOneRecord({}));
-    dateToMs(await sboe.insertOneRecord({}));
-    dateToMs(await sboe.insertOneRecord({}));
+    dateToMs(await sbor.insertOneRecord({}));
+    dateToMs(await sbor.insertOneRecord({}));
+    dateToMs(await sbor.insertOneRecord({}));
 
-    const findCursor = sboe.find({}, { limit: 2 });
+    const findCursor = sbor.find({}, { limit: 2 });
     const findDocs = (await findCursor.toArray()).map(dateToMs);
 
     t.deepEqual(findDocs.length, 2);
 }));
 
 test('assert wrong version', hermeticTest(async (t, { dbClient }) => {
-    const sboe = new SbOptEnt(dbClient.collection('foo'), {
+    const sbor = new SbOptEnt(dbClient.collection('foo'), {
         log: t.log.bind(t)
     });
 
-    await sboe.insertOneRecord({
+    await sbor.insertOneRecord({
         _id: 'foo',
         bar: 'barval',
         bazz: 'bazzval'
     });
 
     const error = await t.throwsAsync(
-            sboe.updateOneRecord({ _id: 'foo' }, v => ({
+            sbor.updateOneRecord({ _id: 'foo' }, v => ({
         ...v,
         plugh: 'plughval'
     }), { expectedVersions: 'abcdefghi' }));
@@ -292,34 +292,34 @@ test('assert wrong version', hermeticTest(async (t, { dbClient }) => {
 }));
 
 test('assert correct version', hermeticTest(async (t, { dbClient }) => {
-    const sboe = new SbOptEnt(dbClient.collection('foo'), {
+    const sbor = new SbOptEnt(dbClient.collection('foo'), {
         log: t.log.bind(t)
     });
 
-    const insertResult = dateToMs(await sboe.insertOneRecord({
+    const insertResult = dateToMs(await sbor.insertOneRecord({
         _id: 'foo',
         bar: 'barval',
         bazz: 'bazzval'
     }));
 
-    await sboe.updateOneRecord({ _id: 'foo' }, v => ({
+    await sbor.updateOneRecord({ _id: 'foo' }, v => ({
         ...v,
         plugh: 'plughval'
-    }), insertResult.document.version_sboe);
+    }), insertResult.document.version_sbor);
 
     t.pass();
 }));
 
 test('cannot update id', hermeticTest(async (t, { dbClient }) => {
-    const sboe = new SbOptEnt(dbClient.collection('foo'), {
+    const sbor = new SbOptEnt(dbClient.collection('foo'), {
         log: t.log.bind(t)
     });
 
-    const insertResult = dateToMs(await sboe.insertOneRecord({
+    const insertResult = dateToMs(await sbor.insertOneRecord({
         _id: 'foo'
     }));
 
-    const e = await t.throwsAsync(sboe.updateOneRecord({ _id: 'foo' }, v => ({
+    const e = await t.throwsAsync(sbor.updateOneRecord({ _id: 'foo' }, v => ({
         ...v,
 
         _id: 'waldo',
@@ -328,71 +328,71 @@ test('cannot update id', hermeticTest(async (t, { dbClient }) => {
     t.is(e.code, 'INVALID_UPDATE');
 }));
 
-test('cannot update createdAt_sboe', hermeticTest(async (t, { dbClient }) => {
-    const sboe = new SbOptEnt(dbClient.collection('foo'), {
+test('cannot update createdAt_sbor', hermeticTest(async (t, { dbClient }) => {
+    const sbor = new SbOptEnt(dbClient.collection('foo'), {
         log: t.log.bind(t)
     });
 
-    const insertResult = dateToMs(await sboe.insertOneRecord({
+    const insertResult = dateToMs(await sbor.insertOneRecord({
         _id: 'foo'
     }));
 
-    const e = await t.throwsAsync(sboe.updateOneRecord({ _id: 'foo' }, v => ({
+    const e = await t.throwsAsync(sbor.updateOneRecord({ _id: 'foo' }, v => ({
         ...v,
 
-        createdAt_sboe: new Date(0)
+        createdAt_sbor: new Date(0)
     })));
 
     t.is(e.code, 'INVALID_UPDATE');
 }));
 
-test('cannot update updatedAt_sboe', hermeticTest(async (t, { dbClient }) => {
-    const sboe = new SbOptEnt(dbClient.collection('foo'), {
+test('cannot update updatedAt_sbor', hermeticTest(async (t, { dbClient }) => {
+    const sbor = new SbOptEnt(dbClient.collection('foo'), {
         log: t.log.bind(t)
     });
 
-    const insertResult = dateToMs(await sboe.insertOneRecord({
+    const insertResult = dateToMs(await sbor.insertOneRecord({
         _id: 'foo'
     }));
 
-    const e = await t.throwsAsync(sboe.updateOneRecord({ _id: 'foo' }, v => ({
+    const e = await t.throwsAsync(sbor.updateOneRecord({ _id: 'foo' }, v => ({
         ...v,
 
-        updatedAt_sboe: new Date(0)
+        updatedAt_sbor: new Date(0)
     })));
 
     t.is(e.code, 'INVALID_UPDATE');
 }));
 
-test('cannot update version_sboe', hermeticTest(async (t, { dbClient }) => {
-    const sboe = new SbOptEnt(dbClient.collection('foo'), {
+test('cannot update version_sbor', hermeticTest(async (t, { dbClient }) => {
+    const sbor = new SbOptEnt(dbClient.collection('foo'), {
         log: t.log.bind(t)
     });
 
-    const insertResult = dateToMs(await sboe.insertOneRecord({
+    const insertResult = dateToMs(await sbor.insertOneRecord({
         _id: 'foo'
     }));
 
-    const e = await t.throwsAsync(sboe.updateOneRecord({ _id: 'foo' }, v => ({
+    const e = await t.throwsAsync(sbor.updateOneRecord({ _id: 'foo' }, v => ({
         ...v,
 
-        version_sboe: new Date(0)
+        version_sbor: new Date(0)
     })));
 
     t.is(e.code, 'INVALID_UPDATE');
 }));
 
 test('may omit protected fields', hermeticTest(async (t, { dbClient }) => {
-    const sboe = new SbOptEnt(dbClient.collection('foo'), {
+    const sbor = new SbOptEnt(dbClient.collection('foo'), {
         log: t.log.bind(t)
     });
 
-    const insertResult = dateToMs(await sboe.insertOneRecord({
+    const insertResult = dateToMs(await sbor.insertOneRecord({
         _id: 'foo',
         bar: 'barval'
     }));
 
-    const updateResult = dateToMs(await sboe.updateOneRecord(
+    const updateResult = dateToMs(await sbor.updateOneRecord(
             { _id: 'foo' }, v => ({
                 bazz: 'bazzval'
             })));
@@ -400,9 +400,9 @@ test('may omit protected fields', hermeticTest(async (t, { dbClient }) => {
     t.deepEqual(updateResult.document, {
         _id: 'foo',
         bazz: 'bazzval',
-        createdAt_sboe: insertResult.document.createdAt_sboe,
-        updatedAt_sboe: updateResult.document.updatedAt_sboe,
-        version_sboe: updateResult.document.version_sboe
+        createdAt_sbor: insertResult.document.createdAt_sbor,
+        updatedAt_sbor: updateResult.document.updatedAt_sbor,
+        version_sbor: updateResult.document.version_sbor
     });
 }));
 
@@ -461,9 +461,9 @@ test('no update', hermeticTest(async (t, { dbClient }) => {
     t.deepEqual(findResult, {
         _id: 'foo',
         bar: 'barval',
-        createdAt_sboe: 123,
-        updatedAt_sboe: 123,
-        version_sboe: findResult.version_sboe
+        createdAt_sbor: 123,
+        updatedAt_sbor: 123,
+        version_sbor: findResult.version_sbor
     });
 }));
 
@@ -581,17 +581,17 @@ test('null value', hermeticTest(async (t, { dbClient }) => {
 }));
 
 test('bad version string', hermeticTest(async (t, { dbClient }) => {
-    const sboe = new SbOptEnt(dbClient.collection('foo'), {
+    const sbor = new SbOptEnt(dbClient.collection('foo'), {
         log: t.log.bind(t)
     });
 
-    const insertResult = dateToMs(await sboe.insertOneRecord({
+    const insertResult = dateToMs(await sbor.insertOneRecord({
         _id: 'foo',
         bar: 'barval',
         bazz: 'bazzval'
     }));
 
-    const e = await t.throwsAsync(sboe.updateOneRecord({ _id: 'foo' }, v => ({
+    const e = await t.throwsAsync(sbor.updateOneRecord({ _id: 'foo' }, v => ({
         _id: v._id,
         bar: v.bar,
         plugh: 'plughval'
@@ -601,22 +601,22 @@ test('bad version string', hermeticTest(async (t, { dbClient }) => {
 }));
 
 test('findOne missing', hermeticTest(async (t, { dbClient }) => {
-    const sboe = new SbOptEnt(dbClient.collection('foo'), {
+    const sbor = new SbOptEnt(dbClient.collection('foo'), {
         log: t.log.bind(t)
     });
 
-    const findResult = await sboe.findOne({ _id: 'foo' });
+    const findResult = await sbor.findOne({ _id: 'foo' });
 
     t.is(findResult, null);
 }));
 
 test('weird error during update', hermeticTest(async (t, { dbClient }) => {
     const colClient = dbClient.collection('foo');
-    const sboe = new SbOptEnt(colClient, {
+    const sbor = new SbOptEnt(colClient, {
         log: t.log.bind(t)
     });
 
-    await sboe.insertOneRecord({
+    await sbor.insertOneRecord({
         _id: 'foo',
         bar: 'barval',
         bazz: 'bazzval'
@@ -624,7 +624,7 @@ test('weird error during update', hermeticTest(async (t, { dbClient }) => {
 
     colClient.replaceOneError = new Error('out of cheese');
     const error = await t.throwsAsync(
-            sboe.updateOneRecord({ _id: 'foo' }, v => ({
+            sbor.updateOneRecord({ _id: 'foo' }, v => ({
                 ...v,
                 plugh: 'plugval'
             })));
@@ -634,13 +634,13 @@ test('weird error during update', hermeticTest(async (t, { dbClient }) => {
 
 test('weird error during upsert', hermeticTest(async (t, { dbClient }) => {
     const colClient = dbClient.collection('foo');
-    const sboe = new SbOptEnt(colClient, {
+    const sbor = new SbOptEnt(colClient, {
         log: t.log.bind(t)
     });
 
     colClient.insertOneError = new Error('out of cheese');
     const error = await t.throwsAsync(
-            sboe.updateOneRecord({ _id: 'foo' }, v => ({
+            sbor.updateOneRecord({ _id: 'foo' }, v => ({
         ...v,
         plugh: 'plughval'
     }), { upsert: true }));
@@ -652,18 +652,18 @@ test('weird error during upsert', hermeticTest(async (t, { dbClient }) => {
 
 test('weird key', hermeticTest(async (t, { dbClient }) => {
     let now = 123;
-    const sboe = new SbOptEnt(dbClient.collection('foo'), {
+    const sbor = new SbOptEnt(dbClient.collection('foo'), {
         log: t.log.bind(t),
         nower: () => now
     });
 
-    const insertResult = dateToMs(await sboe.insertOneRecord({
+    const insertResult = dateToMs(await sbor.insertOneRecord({
         _id: 'foo',
         '%$%.%bar': 'barval'
     }));
 
     now = 124;
-    const updateResult = dateToMs(await sboe.updateOneRecord(
+    const updateResult = dateToMs(await sbor.updateOneRecord(
             { _id: 'foo' }, v => ({
         ...v,
         '%$%.%bar': v['%$%.%bar'] + 'also'
@@ -674,39 +674,39 @@ test('weird key', hermeticTest(async (t, { dbClient }) => {
     t.deepEqual(updateResult.document, {
         '%$%.%bar': 'barvalalso',
         _id: 'foo',
-        createdAt_sboe: 123,
-        updatedAt_sboe: 124,
-        version_sboe: updateResult.document.version_sboe
+        createdAt_sbor: 123,
+        updatedAt_sbor: 124,
+        version_sbor: updateResult.document.version_sbor
     });
 
-    t.not(updateResult.document.version_sboe,
-            insertResult.document.version_sboe);
+    t.not(updateResult.document.version_sbor,
+            insertResult.document.version_sbor);
 
-    const findResult = dateToMs(await sboe.findOne({ _id: 'foo' }));
+    const findResult = dateToMs(await sbor.findOne({ _id: 'foo' }));
 
     t.deepEqual(findResult, {
         '%$%.%bar': 'barvalalso',
         _id: 'foo',
-        createdAt_sboe: 123,
-        updatedAt_sboe: 124,
-        version_sboe: updateResult.document.version_sboe
+        createdAt_sbor: 123,
+        updatedAt_sbor: 124,
+        version_sbor: updateResult.document.version_sbor
     });
 }));
 
 test('weird key in array', hermeticTest(async (t, { dbClient }) => {
     let now = 123;
-    const sboe = new SbOptEnt(dbClient.collection('foo'), {
+    const sbor = new SbOptEnt(dbClient.collection('foo'), {
         log: t.log.bind(t),
         nower: () => now
     });
 
-    const insertResult = dateToMs(await sboe.insertOneRecord({
+    const insertResult = dateToMs(await sbor.insertOneRecord({
         _id: 'foo',
         bar: [{ '%$%.%bazz': 'bazzval' }]
     }));
 
     now = 124;
-    const updateResult = dateToMs(await sboe.updateOneRecord(
+    const updateResult = dateToMs(await sbor.updateOneRecord(
             { _id: 'foo' }, v => ({
         ...v,
 
@@ -718,35 +718,35 @@ test('weird key in array', hermeticTest(async (t, { dbClient }) => {
     t.deepEqual(updateResult.document, {
         _id: 'foo',
         bar: [{ '%$%.%bazz': 'bazzvalalso' }],
-        createdAt_sboe: 123,
-        updatedAt_sboe: 124,
-        version_sboe: updateResult.document.version_sboe
+        createdAt_sbor: 123,
+        updatedAt_sbor: 124,
+        version_sbor: updateResult.document.version_sbor
     });
 
-    t.not(updateResult.document.version_sboe,
-            insertResult.document.version_sboe);
+    t.not(updateResult.document.version_sbor,
+            insertResult.document.version_sbor);
 
-    const findResult = dateToMs(await sboe.findOne({ _id: 'foo' }));
+    const findResult = dateToMs(await sbor.findOne({ _id: 'foo' }));
 
     t.deepEqual(findResult, {
         _id: 'foo',
         bar: [{ '%$%.%bazz': 'bazzvalalso' }],
-        createdAt_sboe: 123,
-        updatedAt_sboe: 124,
-        version_sboe: updateResult.document.version_sboe
+        createdAt_sbor: 123,
+        updatedAt_sbor: 124,
+        version_sbor: updateResult.document.version_sbor
     });
 }));
 
 test('update non-existent', hermeticTest(async (t, { dbClient }) => {
 
     let now = 123;
-    const sboe = new SbOptEnt(dbClient.collection('foo'), {
+    const sbor = new SbOptEnt(dbClient.collection('foo'), {
         log: t.log.bind(t),
         nower: () => now
     });
 
     let ran = false;
-    const updateResult = await sboe.updateOneRecord({ _id: 'foo' }, v => {
+    const updateResult = await sbor.updateOneRecord({ _id: 'foo' }, v => {
         ran = true;
 
         return {
@@ -767,14 +767,14 @@ test('update non-existent', hermeticTest(async (t, { dbClient }) => {
 test('upsert non-existent', hermeticTest(async (t, { dbClient }) => {
 
     let now = 123;
-    const sboe = new SbOptEnt(dbClient.collection('foo'), {
+    const sbor = new SbOptEnt(dbClient.collection('foo'), {
         log: t.log.bind(t),
         nower: () => now
     });
 
     let ran = false;
     const updateResult = dateToMs(
-            await sboe.updateOneRecord({ foo: { $in: ['bar'] } }, v => {
+            await sbor.updateOneRecord({ foo: { $in: ['bar'] } }, v => {
         ran = true;
         t.deepEqual(v, {});
 
@@ -791,24 +791,24 @@ test('upsert non-existent', hermeticTest(async (t, { dbClient }) => {
     t.deepEqual(updateResult.document, {
         _id: 'foo',
         bar: 'bar',
-        createdAt_sboe: 123,
+        createdAt_sbor: 123,
         plugh: 'plughval',
-        updatedAt_sboe: 123,
-        version_sboe: updateResult.document.version_sboe
+        updatedAt_sbor: 123,
+        version_sbor: updateResult.document.version_sbor
     });
 }));
 
 test('upsert non-existent (no id)', hermeticTest(async (t, { dbClient }) => {
 
     let now = 123;
-    const sboe = new SbOptEnt(dbClient.collection('foo'), {
+    const sbor = new SbOptEnt(dbClient.collection('foo'), {
         log: t.log.bind(t),
         nower: () => now
     });
 
     let ran = false;
     const updateResult = dateToMs(
-            await sboe.updateOneRecord({ foo: { $in: ['bar'] } }, v => {
+            await sbor.updateOneRecord({ foo: { $in: ['bar'] } }, v => {
         ran = true;
         t.deepEqual(v, {});
 
@@ -826,10 +826,10 @@ test('upsert non-existent (no id)', hermeticTest(async (t, { dbClient }) => {
     t.deepEqual(updateResult.document, {
         _id: updateResult.document._id,
         bar: 'bar',
-        createdAt_sboe: 123,
+        createdAt_sbor: 123,
         plugh: 'plughval',
-        updatedAt_sboe: 123,
-        version_sboe: updateResult.document.version_sboe
+        updatedAt_sbor: 123,
+        version_sbor: updateResult.document.version_sbor
     });
 }));
 
@@ -837,14 +837,14 @@ test('upsert non-existent ($eq set provided)',
         hermeticTest(async (t, { dbClient }) => {
 
     let now = 123;
-    const sboe = new SbOptEnt(dbClient.collection('foo'), {
+    const sbor = new SbOptEnt(dbClient.collection('foo'), {
         log: t.log.bind(t),
         nower: () => now
     });
 
     let ran = false;
     const updateResult = dateToMs(
-            await sboe.updateOneRecord({
+            await sbor.updateOneRecord({
                 _id: 'foo',
                 bar: { $in: ['baz'] },
                 'waldo.plugh': { $eq: 'bazz' },
@@ -878,64 +878,64 @@ test('upsert non-existent ($eq set provided)',
     t.deepEqual(updateResult.document, {
         _id: updateResult.document._id,
         bar: 'bar',
-        createdAt_sboe: 123,
+        createdAt_sbor: 123,
         plugh: 'plughval',
-        updatedAt_sboe: 123,
-        version_sboe: updateResult.document.version_sboe
+        updatedAt_sbor: 123,
+        version_sbor: updateResult.document.version_sbor
     });
 }));
 
 test('basic insert and deleteOne', hermeticTest(async (t, { dbClient }) => {
-    const sboe = new SbOptEnt(dbClient.collection('foo'), {
+    const sbor = new SbOptEnt(dbClient.collection('foo'), {
         log: t.log.bind(t),
         nower: () => 123
     });
 
-    await sboe.insertOneRecord({
+    await sbor.insertOneRecord({
         _id: 'foo',
         bar: 'barval'
     });
 
-    const deleteResult = await sboe.deleteOne({ _id: 'foo' });
+    const deleteResult = await sbor.deleteOne({ _id: 'foo' });
     t.truthy(deleteResult);
 
-    const findResult = await sboe.findOne({ _id: 'foo' });
+    const findResult = await sbor.findOne({ _id: 'foo' });
 
     t.deepEqual(findResult, null);
 }));
 
 test('deleteOne - confirm true', hermeticTest(async (t, { dbClient }) => {
-    const sboe = new SbOptEnt(dbClient.collection('foo'), {
+    const sbor = new SbOptEnt(dbClient.collection('foo'), {
         log: t.log.bind(t),
         nower: () => 123
     });
 
-    await sboe.insertOneRecord({
+    await sbor.insertOneRecord({
         _id: 'foo',
         bar: 'barval'
     });
 
-    const deleteResult = await sboe.deleteOne(
+    const deleteResult = await sbor.deleteOne(
             { _id: 'foo' }, { confirmDelete: (() => true) });
     t.truthy(deleteResult);
 
-    const findResult = await sboe.findOne({ _id: 'foo' });
+    const findResult = await sbor.findOne({ _id: 'foo' });
 
     t.deepEqual(findResult, null);
 }));
 
 test('deleteOne - confirm false', hermeticTest(async (t, { dbClient }) => {
-    const sboe = new SbOptEnt(dbClient.collection('foo'), {
+    const sbor = new SbOptEnt(dbClient.collection('foo'), {
         log: t.log.bind(t),
         nower: () => 123
     });
 
-    const insertResult = await sboe.insertOneRecord({
+    const insertResult = await sbor.insertOneRecord({
         _id: 'foo',
         bar: 'barval'
     });
 
-    const deleteResult = dateToMs(await sboe.deleteOneRecord(
+    const deleteResult = dateToMs(await sbor.deleteOneRecord(
             { _id: 'foo' }, { confirmDelete: (() => false) }));
 
     t.deepEqual(deleteResult, {
@@ -950,31 +950,31 @@ test('deleteOne - confirm false', hermeticTest(async (t, { dbClient }) => {
         document: {
             _id: 'foo',
             bar: 'barval',
-            createdAt_sboe: 123,
-            updatedAt_sboe: 123,
-            version_sboe: insertResult.document.version_sboe
+            createdAt_sbor: 123,
+            updatedAt_sbor: 123,
+            version_sbor: insertResult.document.version_sbor
         }
     });
 }));
 
 test('deleteOne - use doc data', hermeticTest(async (t, { dbClient }) => {
-    const sboe = new SbOptEnt(dbClient.collection('foo'), {
+    const sbor = new SbOptEnt(dbClient.collection('foo'), {
         log: t.log.bind(t),
         nower: () => 123
     });
 
-    await sboe.insertOneRecord({
+    await sbor.insertOneRecord({
         _id: 'foo',
         shouldDelete: true
     });
 
-    const deleteResult = await sboe.deleteOne(
+    const deleteResult = await sbor.deleteOne(
             { _id: 'foo' }, {
                 confirmDelete: (({ shouldDelete } = {}) => shouldDelete)
             });
     t.truthy(deleteResult);
 
-    const findResult = await sboe.findOne({ _id: 'foo' });
+    const findResult = await sbor.findOne({ _id: 'foo' });
 
     t.deepEqual(findResult, null);
 }));

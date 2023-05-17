@@ -7,10 +7,10 @@ spec:
   template:
     metadata:
       labels:
-        test-job: sb-optimistic-entities
+        test-job: sb-optimistic-resources
     spec:
       restartPolicy: Never
       containers:
       - name: run-tests-ctnr-${PELTON_RUN}
-        image: ${PELTON_BRES}
+        image: ${PELTON_BUILD_RESULT}
         args: $PELTON_TARGET_ARGS
