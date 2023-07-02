@@ -273,7 +273,7 @@ function updateMutation(q, updateFn) {
                         result = await this.collection.insertOne(doc);
                     }
                     catch (e) {
-                        if (e.code !== 11000 || !onlyId(e.keyPattern._id)) {
+                        if (e.code !== 11000 || !onlyId(e.keyPattern)) {
                             if (e.code === 11000) {
                                 // We ran afoul of some other unique index.
                                 const source = new Error();

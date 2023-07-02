@@ -20,10 +20,10 @@ module.exports = (log) => {
     return {
         collection(name) {
             if (!collections[name]) {
-                collections[name] = [];
+                collections[name] = fakeMongoCollectionClient([], log);
             }
 
-            return fakeMongoCollectionClient(collections[name], log);
+            return collections[name];
         },
 
         dropDatabase() {}
@@ -31,7 +31,28 @@ module.exports = (log) => {
 };
 
 function fakeMongoCollectionClient(docs, log) {
+    const uniquenessConstraints = [];
+
+    function guaranteeUnique(d) {
+        for (const c of uniquenessConstraints) {
+            const violations = docs.filter(
+                    d2 => d._id !== d2._id && c.every(f => d[f] === d2[f]));
+
+            if (violations.length > 0) {
+                const e = new Error('E11000 duplicate key error');
+                e.code = 11000;
+                throw e;
+            }
+        }
+    }
+
     return {
+        createIndex(spec, { unique }) {
+            if (unique) {
+                uniquenessConstraints.push(spec.map(([key]) => key));
+            }
+        },
+
         deleteMany(q) {
             const predicate = sift(q);
             while (docs.some(predicate)) {
@@ -74,9 +95,11 @@ function fakeMongoCollectionClient(docs, log) {
                 };
             }
 
+            guaranteeUnique(d);
+
             docs.push(clone(d));
 
-            return {};
+            return { insertedId: d._id };
         },
 
         async replaceOne(q, d, opts = {}) {
@@ -106,7 +129,10 @@ function fakeMongoCollectionClient(docs, log) {
                 }
             }
             else {
-                docs[index] = { ...clone(q), ...clone(d) };
+                const newValue = { ...clone(q), ...clone(d) };
+                guaranteeUnique(newValue);
+
+                docs[index] = newValue;
             }
 
             return {
