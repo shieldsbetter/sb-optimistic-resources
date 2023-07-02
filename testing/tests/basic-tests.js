@@ -978,3 +978,80 @@ test('deleteOne - use doc data', hermeticTest(async (t, { dbClient }) => {
 
     t.deepEqual(findResult, null);
 }));
+
+test('insert violates another index', hermeticTest(async (t, { dbClient }) => {
+    const collection = dbClient.collection('foo');
+    await collection.createIndex([[ 'foo', 1 ]], { unique: true });
+
+    const sbor = new SbOptEnt(dbClient.collection('foo'), {
+        log: t.log.bind(t),
+        nower: () => 123
+    });
+
+    await sbor.insertOneRecord({
+        _id: '1',
+        foo: 'fooval'
+    });
+
+    const e = await t.throwsAsync(sbor.insertOneRecord({
+        _id: '2',
+        foo: 'fooval'
+    }));
+
+    t.truthy(e.message.startsWith('E11000 duplicate key error'));
+}));
+
+test('update violates another index', hermeticTest(async (t, { dbClient }) => {
+    const collection = dbClient.collection('foo');
+    await collection.createIndex([[ 'foo', 1 ]], { unique: true });
+
+    const sbor = new SbOptEnt(dbClient.collection('foo'), {
+        log: t.log.bind(t),
+        nower: () => 123
+    });
+
+    await sbor.insertOneRecord({
+        _id: '1',
+        foo: 'fooval'
+    });
+
+    await sbor.insertOneRecord({
+        _id: '2',
+        foo: 'other'
+    });
+
+    const e = await t.throwsAsync(sbor.updateOneRecord({
+        _id: '2',
+    }, d => {
+        d.foo = 'fooval';
+        return d;
+    }));
+
+    t.truthy(e.message.startsWith('E11000 duplicate key error'));
+}));
+
+test('upsert violates another index', hermeticTest(async (t, { dbClient }) => {
+    const collection = dbClient.collection('foo');
+    await collection.createIndex([[ 'foo', 1 ]], { unique: true });
+
+    const sbor = new SbOptEnt(dbClient.collection('foo'), {
+        log: t.log.bind(t),
+        nower: () => 123
+    });
+
+    await sbor.insertOneRecord({
+        _id: '1',
+        foo: 'fooval'
+    });
+
+    const e = await t.throwsAsync(sbor.updateOneRecord({
+        _id: '2',
+    }, d => {
+        d.foo = 'fooval';
+        return d;
+    }, {
+        upsert: true
+    }));
+
+    t.truthy(e.message.startsWith('E11000 duplicate key error'));
+}));

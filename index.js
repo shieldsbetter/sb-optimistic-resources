@@ -273,7 +273,14 @@ function updateMutation(q, updateFn) {
                         result = await this.collection.insertOne(doc);
                     }
                     catch (e) {
-                        if (e.code !== 11000) {
+                        if (e.code !== 11000 || !onlyId(e.keyPattern._id)) {
+                            if (e.code === 11000) {
+                                // We ran afoul of some other unique index.
+                                const source = new Error();
+                                e.source = source;
+                                throw e;
+                            }
+
                             throw error('UNEXPECTED_ERROR',
                                     'Unexpected error.', e);
                         }
@@ -318,6 +325,10 @@ function updateMutation(q, updateFn) {
             newDoc === undefined ? curDoc : newDoc
         ];
     };
+}
+
+function onlyId(o) {
+    return typeof o === 'object' && Object.keys(o).length === 1 && '_id' in o;
 }
 
 function validateAndNormalizeExpectedVersions(expectedVersions) {

@@ -1,4 +1,4 @@
 #!/bin/bash
 
 cd /vagrant
-pelton start --environment test
+pelton start --environment test . "${@}"

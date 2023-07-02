@@ -5,6 +5,10 @@ class CollectionWrapper {
         this.base = base;
     }
 
+    createIndex(...args) {
+        return this.base.createIndex(...args);
+    }
+
     deleteMany(...args) {
         return this.base.deleteMany(...args);
     }

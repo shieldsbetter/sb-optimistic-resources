@@ -9,4 +9,4 @@ RUN npm ci
 
 COPY . .
 ENTRYPOINT []
-CMD ["sh", "-c", "${RUN_TESTS}"]
+CMD ["sh", "-c", ${RUN_TESTS}]

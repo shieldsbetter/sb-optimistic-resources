@@ -22,6 +22,6 @@ environments: {
                 environment: 'test'
             }
         ],
-        podSelector: 'test-job=sb-optimistic-resources'
+        podSelector: 'test-job=sb-optimistic-resources-${PELTON_RUN}'
     }
 }
